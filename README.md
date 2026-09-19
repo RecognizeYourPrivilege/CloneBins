@@ -3,11 +3,14 @@
 Cluster AI-generated images by **face** and **body/identity**, then drop each
 identity into its own folder for LoRA training datasets.
 
-v0.1 is a local CLI, a local web UI, a Tauri 2 desktop shell, and a shared
-Python core. iOS is still a placeholder — it will wrap the same core later.
+v0.1 is a local CLI, a local web UI, a Tauri 2 desktop shell, an iOS SwiftUI
+client, and a shared Python core.
 
-Processing is **offline-first**: images never leave the machine. Face model
-weights are downloaded once (optional if you only need appearance clustering).
+Processing is **offline-first / user-controlled**: CLI, web, and desktop keep
+images on the machine that runs `clonebins_core`. The iOS app sends photos you
+pick to a **clonebins-api you run** (Mac loopback or LAN) — not a vendor cloud.
+Face model weights are downloaded once on the API/CLI host (optional if you
+only need appearance clustering).
 
 ## Architecture (short)
 
@@ -20,15 +23,16 @@ One shared core, four clients:
 | `packages/api` | **implemented** | FastAPI, imports `clonebins_core` |
 | `apps/web` | **implemented** | Vite + React + TypeScript |
 | `apps/desktop` | **implemented** | Tauri 2 + `apps/web` + Python sidecar |
-| `apps/ios` | placeholder | SwiftUI / Core ML (later) |
+| `apps/ios` | **scaffold** | SwiftUI client → user-run `clonebins-api` (Core ML stubbed) |
 
 **Why this stack:** Python is the lingua franca of LoRA tooling and ONNX face
 models. Typer keeps the MVP usable on Linux and macOS today. OpenCV YuNet +
 SFace give real face embeddings without PyTorch or InsightFace in the default
 path (InsightFace is an optional swap). Body/appearance uses a light local
 embedding so `--mode face+body` works without a CLIP download. Desktop/web can
-reuse the core via FastAPI or a sidecar; iOS stays a thin client on the same
-folder contract (`subject_01/`, `subject_02/`, …).
+reuse the core via FastAPI or a sidecar. iOS is a thin SwiftUI client of the
+same API (Photos/Files import, preview, zip share sheet) on the same folder
+contract (`subject_01/`, `subject_02/`, …). On-device Core ML is a stub for later.
 
 See [docs/architecture.md](docs/architecture.md) for the longer plan.
 
@@ -39,6 +43,7 @@ See [docs/architecture.md](docs/architecture.md) for the longer plan.
 - `pip` or [`uv`](https://docs.astral.sh/uv/)
 - Node 20+ (web + desktop)
 - Rust 1.85+ (desktop / Tauri 2)
+- macOS + Xcode 15+ (iOS client; this repo’s Linux CI cannot compile it)
 
 ## Install
 
@@ -210,6 +215,35 @@ npm run build:unsigned
 macOS `.app` / `.dmg`: `npm run build` on a Mac. Signing/notarization is not
 configured — see [apps/desktop/README.md](apps/desktop/README.md).
 
+## iOS app (SwiftUI)
+
+Thin client of the same FastAPI process. Clustering still happens in
+`clonebins_core` on the Mac (or any host you run `clonebins-api` on). There is
+no cloud account. True on-device Core ML embeddings are **not** in v1 (protocol
+stub only).
+
+This Linux environment cannot compile or sign iOS. On a Mac:
+
+```bash
+python3 -m pip install -e packages/core -e packages/api
+clonebins-api
+# simulator: 127.0.0.1:8765 is enough
+# physical device: CLONEBINS_API_HOST=0.0.0.0 clonebins-api
+
+brew install xcodegen
+cd apps/ios
+xcodegen generate
+open CloneBins.xcodeproj
+```
+
+In-app **Settings → API base URL**: `http://127.0.0.1:8765` in Simulator, or
+`http://<Mac-LAN-IP>:8765` on a phone on the same Wi-Fi.
+
+Photos / Files import (jpg/png/webp; HEIC is converted to JPEG on device) →
+threshold / min-images / `face` vs `face+body` → thumbnail bins, rename,
+merge, zip share sheet. Details and honest limits:
+[apps/ios/README.md](apps/ios/README.md).
+
 ## Example: prep a LoRA dataset
 
 Goal: 10–30 images of **one** character, consistent identity, local files only.
@@ -246,8 +280,12 @@ filesystem; CloneBins copies if linking fails.
 
 ## Privacy
 
-- No cloud account, no upload, no telemetry.
-- The only optional network call is fetching YuNet/SFace weights.
+- No cloud account, no vendor upload, no telemetry.
+- CLI / web / desktop process files on the machine you run them on.
+- iOS v1 uploads the photos you pick to **your** `clonebins-api` (loopback or
+  LAN). That is still not a hosted service.
+- The only optional vendor network call is fetching YuNet/SFace weights onto
+  the API/CLI host.
 - Do not point `--input` at folders you would not want processed on that
   machine; output bins are extra copies/hardlinks of those files.
 
@@ -266,7 +304,7 @@ packages/cli/      Typer CLI (clonebins)
 packages/api/      FastAPI (clonebins-api)
 apps/web/          Vite + React UI
 apps/desktop/      Tauri 2 shell
-apps/ios/          placeholder
+apps/ios/          SwiftUI + XcodeGen (LAN API client; Core ML stub)
 docs/architecture.md
 tests/
 ```

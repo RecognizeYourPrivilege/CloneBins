@@ -46,3 +46,10 @@ demo_output/
 node_modules/
 apps/web/dist/
 apps/desktop/src-tauri/target/
+
+# Xcode (generated on a Mac via `xcodegen generate`)
+xcuserdata/
+*.xcuserstate
+DerivedData/
+apps/ios/CloneBins.xcodeproj/
+apps/ios/CloneBins.xcworkspace/

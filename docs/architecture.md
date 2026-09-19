@@ -1,8 +1,9 @@
 # CloneBins architecture
 
 CloneBins is a **shared-core monorepo**: one Python clustering pipeline, thin
-clients. Core, CLI, local web UI, and a Tauri 2 desktop shell are implemented.
-iOS remains a stub with the same folder contract.
+clients. Core, CLI, local web UI, Tauri 2 desktop, and an iOS SwiftUI client
+are implemented. iOS v1 talks to a user-run `clonebins-api` over loopback/LAN
+and keeps the same `subject_XX` folder contract. On-device Core ML is stubbed.
 
 ## Why a shared core
 
@@ -14,7 +15,7 @@ not be reimplemented per platform. `packages/core` (`clonebins_core`) owns:
 3. Face detect + embed (default: OpenCV YuNet + SFace ONNX)
 4. Optional body/appearance embed (lightweight ReID-style histogram; CLIP later)
 5. Agglomerative clustering on cosine similarity
-6. Export to `output/<subject_prefix>_NN/` via copy or hardlink (CLI) or zip (web/desktop)
+6. Export to `output/<subject_prefix>_NN/` via copy or hardlink (CLI) or zip (web/desktop/iOS)
 
 `packages/cli` is a Typer wrapper: flags, progress, preview table, Ctrl-C.
 `packages/api` is a FastAPI wrapper: upload or local path, progress, rename /
@@ -23,20 +24,25 @@ merge / split / exclude, zip download. Both call `run_pipeline()`.
 The desktop app is a Tauri 2 window around `apps/web`. It spawns `clonebins-api`
 as a loopback sidecar so clustering still happens in Python, not in Rust.
 
+The iOS app is a native SwiftUI client of that same FastAPI process. Photos you
+pick are uploaded to an API **you run** (Simulator → `127.0.0.1`; device → LAN
+IP with `CLONEBINS_API_HOST=0.0.0.0`). It does not embed faces on-device in v1.
+
 ```
                     ┌─────────────────────┐
                     │   clonebins_core    │
                     │  scan → embed →     │
                     │  cluster → export   │
                     └─────────┬───────────┘
-            ┌─────────┬───────┼────────┬──────────┐
-            ▼         ▼       ▼        ▼          ▼
-         CLI       FastAPI   Tauri    SwiftUI   (tests)
-       (Typer)    (web API) sidecar   (iOS)
-                      │         │
-                      └── Vite / React (apps/web)
-                            ▲
-                            └── Tauri 2 loads this UI
+                 ┌────────────┼────────────┐
+                 ▼            ▼            ▼
+              CLI         FastAPI       (tests)
+            (Typer)      (web API)
+                             │
+              ┌──────────────┼──────────────┐
+              ▼              ▼              ▼
+         Vite/React       Tauri 2      SwiftUI iOS
+         (apps/web)      sidecar      LAN / 127.0.0.1
 ```
 
 ## Stack choices
@@ -49,7 +55,7 @@ as a loopback sidecar so clustering still happens in Python, not in Rust.
 | Clustering | Average-linkage agglomerative clustering, cosine distance | `--threshold` maps cleanly to cosine similarity. HDBSCAN is a later option for unknown cluster counts with density noise. |
 | Web | Vite + React + TypeScript UI, local FastAPI (`clonebins-api`) | FastAPI imports `clonebins_core` directly. The browser only talks to localhost. Zip download of bins. |
 | Desktop | Tauri 2 wrapping `apps/web` + Python sidecar | Native window, folder picker, zip save. Sidecar is `clonebins-api` (same core). No Electron, no duplicated clustering. |
-| iOS (later) | SwiftUI | Thin client. On-device: Core ML conversion of YuNet/SFace (or Apple Vision). Same `subject_XX` export contract. |
+| iOS (v1) | SwiftUI + XcodeGen (`apps/ios`) | Photos/Files import, settings, cluster preview, rename/merge, zip share sheet. Talks to user-run `clonebins-api`. `OnDeviceEmbeddingBackend` / `CoreMLIdentityBackend` are stubs for a later YuNet+SFace (or Vision) path. Linux cannot `xcodebuild`. |
 
 ## Offline-first / privacy
 
@@ -58,6 +64,10 @@ as a loopback sidecar so clustering still happens in Python, not in Rust.
 - The web UI is not a SaaS: it is a frontend for a process you run yourself.
 - The desktop sidecar binds `127.0.0.1` only and is stopped when the window exits
   (unless you already had `clonebins-api` running).
+- iOS v1 is not a cloud client: it only talks to the API URL you type (default
+  `http://127.0.0.1:8765`). ATS is limited to local networking
+  (`NSAllowsLocalNetworking`). Physical devices need the API bound to `0.0.0.0`
+  on your LAN — still not the public internet.
 - Runtime does not need the network **after** YuNet + SFace weights are on disk
   (`~/.cache/clonebins/models`, overridable with `CLONEBINS_MODELS_DIR`).
 - First-time `clonebins models download` (or the first cluster run with model
@@ -74,7 +84,7 @@ as a loopback sidecar so clustering still happens in Python, not in Rust.
 - `min-images`: clusters smaller than the cutoff are reported and not exported
   by default (web: shown as “below min”, off in the zip until you include or merge).
 - Folder names are filesystem-safe: `subject_01`, `subject_02`, … (prefix
-  configurable; the web UI can rename bins before zip). Largest clusters first.
+  configurable; web and iOS can rename bins before zip). Largest clusters first.
 
 ## Repo layout
 
@@ -85,7 +95,7 @@ CloneBins/
   packages/api/      clonebins-api (FastAPI)
   apps/web/          Vite + React UI
   apps/desktop/      Tauri 2 shell (reuses apps/web)
-  apps/ios/          placeholder (SwiftUI later)
+  apps/ios/          SwiftUI + XcodeGen (LAN client; Core ML stub)
   docs/              this note
 ```
 
