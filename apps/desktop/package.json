@@ -1,0 +1,16 @@
+{
+  "name": "clonebins-desktop",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Tauri 2 shell for CloneBins — reuses apps/web and clonebins-api.",
+  "type": "module",
+  "scripts": {
+    "dev": "tauri dev",
+    "build": "tauri build",
+    "build:unsigned": "tauri build --no-bundle",
+    "tauri": "tauri"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.5.0"
+  }
+}
