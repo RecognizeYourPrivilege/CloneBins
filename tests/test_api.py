@@ -63,6 +63,7 @@ def test_upload_cluster_rename_zip(tmp_path: Path):
     assert skipped[0]["filename"] == "corrupt.jpg"
 
     first = job["clusters"][0]
+    assert first["included"] is False
     renamed = client.patch(
         f"/api/jobs/{job_id}/clusters/{first['id']}",
         json={"name": "hero_main"},
@@ -70,6 +71,17 @@ def test_upload_cluster_rename_zip(tmp_path: Path):
     assert renamed.status_code == 200
     names = {c["name"] for c in renamed.json()["clusters"]}
     assert "hero_main" in names
+
+    empty_zip = client.get(f"/api/jobs/{job_id}/export.zip")
+    assert empty_zip.status_code == 400
+
+    included = client.post(f"/api/jobs/{job_id}/include-all", json={"included": True})
+    assert included.status_code == 200
+    assert all(c["included"] for c in included.json()["clusters"])
+
+    original = client.get(f"/api/jobs/{job_id}/images/{first['image_ids'][0]}")
+    assert original.status_code == 200
+    assert original.headers["content-type"] in {"image/png", "image/jpeg"}
 
     thumb = client.get(f"/api/jobs/{job_id}/thumbs/{first['image_ids'][0]}")
     assert thumb.status_code == 200
@@ -98,6 +110,7 @@ def test_from_path_and_merge(tmp_path: Path):
     assert job["status"] == "done"
     ids = [c["id"] for c in job["clusters"]]
     assert len(ids) == 2
+    client.post(f"/api/jobs/{job_id}/include-all", json={"included": True})
     merged = client.post(f"/api/jobs/{job_id}/merge", json={"cluster_ids": ids})
     assert merged.status_code == 200
     body = merged.json()

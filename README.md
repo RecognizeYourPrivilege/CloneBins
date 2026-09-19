@@ -72,16 +72,22 @@ uv run clonebins --help
 
 ## Face models (one-time, optional)
 
-Default face clustering uses two local ONNX weights from the OpenCV zoo:
+Default face clustering uses two local ONNX weights from the OpenCV zoo
+(Hugging Face `opencv/face_detection_yunet` and `opencv/face_recognition_sface`).
+Each family has three variants; the Docker web image embeds all six:
 
-- YuNet face detector (`face_detection_yunet_2023mar.onnx`)
-- SFace recognizer (`face_recognition_sface_2021dec.onnx`)
+| Detector (YuNet) | Recognizer (SFace) |
+| --- | --- |
+| `2023mar` FP32 (default) | `2021dec` FP32 (default) |
+| `2023mar_int8` faster | `2021dec_int8` faster |
+| `2023mar_int8bq` block-quant | `2021dec_int8bq` block-quant |
 
 They are stored in `~/.cache/clonebins/models` (override with
 `CLONEBINS_MODELS_DIR`). After they exist, **no network is used**.
 
 ```bash
-clonebins models download
+clonebins models download          # default FP32 pair
+clonebins models download --all    # all six ONNX files
 clonebins models status
 ```
 
@@ -185,6 +191,18 @@ the FastAPI process on this machine.
    ```
 
 3. Open http://127.0.0.1:5173. Vite proxies `/api` to the FastAPI port.
+
+Or run the web UI and API together in Docker (YuNet + SFace ONNX files are
+copied into the image from Hugging Face / opencv_zoo):
+
+```bash
+docker compose up --build
+```
+
+Open http://127.0.0.1:8765. Choose detector/recognizer in Settings. Bins start
+**unchecked** for the zip; use **Include all in zip** or tick **in zip** per bin.
+Click a thumbnail to select it; **open ↗** (or Ctrl/Cmd-click, or right-click →
+Open in new tab) loads the original in a new window.
 
 Flow: upload jpg/png/webp (corrupt files are skipped and listed) **or** type a
 folder path on this machine → set threshold / min-images / `face` vs

@@ -9,6 +9,8 @@ export type ClusterSettings = {
   subject_prefix: string;
   download_models: boolean;
   keep_names: boolean;
+  yunet: "2023mar" | "2023mar_int8" | "2023mar_int8bq";
+  sface: "2021dec" | "2021dec_int8" | "2021dec_int8bq";
 };
 
 export type JobImage = {
@@ -56,4 +58,20 @@ export type Health = {
   privacy: string;
   models_dir: string;
   models_ready: boolean;
+  models?: {
+    models_dir: string;
+    yunet: ModelSpec[];
+    sface: ModelSpec[];
+    default_yunet: string;
+    default_sface: string;
+  };
+};
+
+export type ModelSpec = {
+  id: string;
+  filename: string;
+  label: string;
+  notes: string;
+  ready: boolean;
+  bytes: number;
 };

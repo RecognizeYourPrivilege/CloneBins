@@ -36,6 +36,8 @@ class PipelineConfig:
     recursive: bool = True
     download_models: bool = True
     models_dir: Path | None = None
+    yunet_id: str = "2023mar"
+    sface_id: str = "2021dec"
     embedder: HybridEmbedder | None = None
 
 
@@ -56,6 +58,8 @@ def run_pipeline(config: PipelineConfig, progress: ProgressReporter | None = Non
             download_models=config.download_models,
             models_dir=config.models_dir,
             log=reporter.log,
+            yunet_id=config.yunet_id,
+            sface_id=config.sface_id,
         )
 
     records: list[ImageRecord] = []

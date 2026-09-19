@@ -1,0 +1,14 @@
+.git
+.github
+.pytest_cache
+**/.venv
+**/__pycache__
+**/*.egg-info
+**/node_modules
+**/target
+apps/desktop
+apps/ios
+docs/demo
+tests
+*.md
+!README.md
