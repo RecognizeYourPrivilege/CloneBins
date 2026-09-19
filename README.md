@@ -221,11 +221,21 @@ npm run build:unsigned
 # apps/desktop/src-tauri/target/release/clonebins-desktop
 ```
 
-macOS `.app` in a DMG is published by GitHub Actions on a Mac runner:
-[Releases](https://github.com/RecognizeYourPrivilege/CloneBins/releases)
-(`CloneBins-0.1.0-macos-arm64.dmg` for Apple Silicon,
-`CloneBins-0.1.0-macos-x64.dmg` for Intel). Not notarized — see
-[apps/desktop/README.md](apps/desktop/README.md).
+GitHub Actions publishes Linux and macOS installers on
+[Releases](https://github.com/RecognizeYourPrivilege/CloneBins/releases):
+
+| File | Platform |
+| --- | --- |
+| `CloneBins-0.1.0-macos-arm64.dmg` | Apple Silicon |
+| `CloneBins-0.1.0-macos-x64.dmg` | Intel Mac |
+| `CloneBins-0.1.0-ubuntu-amd64.deb` | Ubuntu / Debian |
+| `CloneBins-0.1.0-linux-x64.AppImage` | Generic glibc Linux |
+| `CloneBins-0.1.0-archlinux-x86_64.pkg.tar.zst` | Arch |
+| `CloneBins-0.1.0-alpine-x86_64.apk` | Alpine (musl; GUI if WebKit built, else CLI + API) |
+
+macOS DMGs are not notarized — see
+[apps/desktop/README.md](apps/desktop/README.md). Alpine packages from CI are
+unsigned (`apk add --allow-untrusted`).
 
 ## iOS app (SwiftUI)
 
