@@ -25,7 +25,8 @@ fi
 
 STAGING="$(mktemp -d)"
 trap 'rm -rf "$STAGING"' EXIT
-cp -R "$APP" "$STAGING/CloneBins.app"
+# Move (not copy) the .app so wrapping does not need 2× disk for the sidecar.
+mv "$APP" "$STAGING/CloneBins.app"
 ln -s /Applications "$STAGING/Applications"
 
 mkdir -p "$(dirname "$DMG_OUT")"
