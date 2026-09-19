@@ -81,8 +81,10 @@ IP with `CLONEBINS_API_HOST=0.0.0.0`). It does not embed faces on-device in v1.
 - One embedding per image. If several faces are found, the **largest** box is used
   (typical for character portraits).
 - `face` mode: drop images with no face embedding into the unmatched set.
-- `face+body`: concatenate face ⊕ appearance (face-weighted). No face →
-  appearance only, so stylized gens still bin by look.
+- `face+body`: concatenate face ⊕ appearance (face-weighted). No face → zero
+  face half + appearance, so every row is the same length (mixed folders used
+  to crash with ``all input arrays must have the same shape``). Stylized gens
+  still bin by look.
 - `min-images`: clusters smaller than the cutoff are reported and not exported
   by default (web: shown as “below min”, off in the zip until you include or merge).
 - Folder names are filesystem-safe: `subject_01`, `subject_02`, … (prefix
