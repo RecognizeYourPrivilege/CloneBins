@@ -90,7 +90,8 @@ To rebuild the same artifact on a Mac:
 ```bash
 cd apps/desktop
 npm install
-npx tauri build --bundles dmg
+npx tauri build --bundles app
+# then scripts/package-macos-dmg.sh injects clonebins-api and wraps a DMG
 ```
 
 Produces `src-tauri/target/release/bundle/dmg/` and
