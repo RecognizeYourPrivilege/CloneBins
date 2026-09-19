@@ -1,0 +1,26 @@
+[project]
+name = "clonebins"
+version = "0.1.0"
+description = "CLI for clustering AI-generated images into LoRA identity bins."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "CloneBins contributors" }]
+dependencies = [
+  "clonebins-core @ file:../core",
+  "typer>=0.12",
+  "rich>=13.7",
+]
+
+[project.scripts]
+clonebins = "clonebins_cli.main:app"
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
