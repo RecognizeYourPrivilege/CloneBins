@@ -36,6 +36,7 @@ See [docs/architecture.md](docs/architecture.md) for the longer plan.
 - Linux or macOS
 - Python 3.10+
 - `pip` or [`uv`](https://docs.astral.sh/uv/)
+- OpenCV 4.x (pulled in automatically; the core package pins `opencv-python-headless>=4.8,<5`)
 
 ## Install
 
