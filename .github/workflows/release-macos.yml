@@ -1,0 +1,116 @@
+# Builds CloneBins.app on GitHub-hosted macOS and publishes a DMG release.
+# Trigger: push a v* tag (e.g. v0.1.0). This Linux environment cannot produce a .app.
+name: Release macOS DMG
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to create or reuse (e.g. v0.1.0)"
+        required: true
+        default: "v0.1.0"
+
+permissions:
+  contents: write
+
+jobs:
+  macos-dmg:
+    runs-on: macos-latest
+    timeout-minutes: 75
+    env:
+      MACOSX_DEPLOYMENT_TARGET: "12.0"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: |
+            apps/web/package-lock.json
+            apps/desktop/package-lock.json
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop/src-tauri
+
+      - name: Install Python packages + PyInstaller
+        run: |
+          python3 -m pip install --upgrade pip
+          python3 -m pip install -e packages/core -e packages/api pyinstaller
+
+      - name: Freeze clonebins-api sidecar
+        run: |
+          python3 -m PyInstaller \
+            --noconfirm --clean --onefile \
+            --name clonebins-api \
+            --hidden-import uvicorn.logging \
+            --hidden-import uvicorn.loops.auto \
+            --hidden-import uvicorn.protocols.http.auto \
+            --hidden-import uvicorn.protocols.websockets.auto \
+            --hidden-import uvicorn.lifespan.on \
+            --collect-all uvicorn \
+            --collect-all fastapi \
+            --collect-all starlette \
+            --collect-all numpy \
+            --collect-all cv2 \
+            --collect-all sklearn \
+            --collect-all PIL \
+            --collect-all clonebins_core \
+            --collect-all clonebins_api \
+            packages/api/src/clonebins_api/__main__.py
+          ls -lh dist/clonebins-api
+
+      - name: Install JS deps
+        run: |
+          npm ci --prefix apps/web
+          npm ci --prefix apps/desktop
+
+      - name: Build CloneBins.app
+        working-directory: apps/desktop
+        run: npx tauri build --bundles dmg
+
+      - name: Inject sidecar and wrap DMG
+        run: |
+          chmod +x apps/desktop/scripts/package-macos-dmg.sh
+          APP="$(echo apps/desktop/src-tauri/target/release/bundle/macos/*.app)"
+          test -d "$APP"
+          mkdir -p dist/release
+          apps/desktop/scripts/package-macos-dmg.sh \
+            dist/clonebins-api \
+            "$APP" \
+            dist/release/CloneBins-0.1.0-macos-arm64.dmg
+          ls -lh dist/release "$APP/Contents/MacOS"
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+          name: CloneBins ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+          draft: false
+          prerelease: false
+          fail_on_unmatched_files: true
+          files: dist/release/CloneBins-0.1.0-macos-arm64.dmg
+          body: |
+            macOS desktop app: **CloneBins.app** inside this DMG (Apple Silicon / arm64).
+
+            **Not notarized.** First launch: right-click the app → Open, or allow it under
+            System Settings → Privacy & Security. Built with an ad-hoc signature on GitHub
+            Actions (`macos-latest`).
+
+            The DMG includes a bundled `clonebins-api` sidecar (same `clonebins_core`
+            pipeline as the CLI). Clustering stays on your Mac; there is no cloud account.
+
+            Intel Macs are not in this artifact. Python from the repo is not required for
+            the bundled sidecar.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
