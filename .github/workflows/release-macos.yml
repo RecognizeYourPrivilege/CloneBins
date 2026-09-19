@@ -1,0 +1,202 @@
+# Builds CloneBins.app on GitHub-hosted macOS (Apple Silicon + Intel) and
+# publishes both DMGs on a GitHub Release. Linux cannot produce a .app.
+name: Release macOS DMG
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to create or reuse (e.g. v0.1.0)"
+        required: true
+        default: "v0.1.0"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-macos
+  cancel-in-progress: true
+
+jobs:
+  macos-dmg:
+    name: dmg-${{ matrix.arch }}
+    runs-on: macos-latest
+    timeout-minutes: 75
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: arm64
+            rust_target: aarch64-apple-darwin
+            python_arch: arm64
+          - arch: x64
+            rust_target: x86_64-apple-darwin
+            python_arch: x64
+    env:
+      MACOSX_DEPLOYMENT_TARGET: "12.0"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          architecture: ${{ matrix.python_arch }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: |
+            apps/web/package-lock.json
+            apps/desktop/package-lock.json
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust_target }}
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop/src-tauri
+          key: ${{ matrix.arch }}
+
+      - name: Install Python packages + PyInstaller
+        run: |
+          set -euo pipefail
+          PYTHON="${pythonLocation}/bin/python3"
+          run_py() {
+            if [[ "${{ matrix.arch }}" == "x64" ]]; then
+              arch -x86_64 "$PYTHON" "$@"
+            else
+              "$PYTHON" "$@"
+            fi
+          }
+          if [[ "${{ matrix.arch }}" == "x64" ]] && ! arch -x86_64 /usr/bin/true; then
+            sudo softwareupdate --install-rosetta --agree-to-license
+          fi
+          run_py -m pip install --upgrade pip
+          run_py -m pip install -e packages/core -e packages/api pyinstaller
+          run_py -c "import platform, sys; print(sys.executable, platform.machine(), platform.architecture())"
+          MACHINE="$(run_py -c 'import platform; print(platform.machine())')"
+          case "${{ matrix.arch }}" in
+            arm64) EXPECT=arm64 ;;
+            x64) EXPECT=x86_64 ;;
+          esac
+          if [[ "$MACHINE" != "$EXPECT" ]]; then
+            echo "Python arch is $MACHINE, expected $EXPECT for ${{ matrix.arch }}" >&2
+            file "$PYTHON" >&2
+            exit 1
+          fi
+
+      - name: Freeze clonebins-api sidecar
+        run: |
+          set -euo pipefail
+          PYTHON="${pythonLocation}/bin/python3"
+          run_py() {
+            if [[ "${{ matrix.arch }}" == "x64" ]]; then
+              arch -x86_64 "$PYTHON" "$@"
+            else
+              "$PYTHON" "$@"
+            fi
+          }
+          run_py -m PyInstaller \
+            --noconfirm --clean --onefile \
+            --name clonebins-api \
+            --hidden-import uvicorn.logging \
+            --hidden-import uvicorn.loops.auto \
+            --hidden-import uvicorn.protocols.http.auto \
+            --hidden-import uvicorn.protocols.websockets.auto \
+            --hidden-import uvicorn.lifespan.on \
+            --hidden-import sklearn.cluster \
+            --hidden-import sklearn.metrics.pairwise \
+            --collect-all clonebins_core \
+            --collect-all clonebins_api \
+            --exclude-module tkinter \
+            --exclude-module matplotlib \
+            --exclude-module sklearn.datasets \
+            --exclude-module sklearn.tests \
+            --exclude-module scipy.tests \
+            packages/api/src/clonebins_api/__main__.py
+          rm -rf build
+          file dist/clonebins-api
+          ls -lh dist/clonebins-api
+          df -h .
+
+      - name: Install JS deps
+        run: |
+          npm ci --prefix apps/web
+          npm ci --prefix apps/desktop
+
+      - name: Build CloneBins.app (${{ matrix.arch }})
+        working-directory: apps/desktop
+        # Bundle the .app only. `--bundles dmg` deletes macos/CloneBins.app after
+        # wrapping, which leaves nothing to inject the sidecar into.
+        run: npx tauri build --target ${{ matrix.rust_target }} --bundles app
+
+      - name: Inject sidecar and wrap DMG
+        run: |
+          chmod +x apps/desktop/scripts/package-macos-dmg.sh
+          APP="apps/desktop/src-tauri/target/${{ matrix.rust_target }}/release/bundle/macos/CloneBins.app"
+          if [[ ! -d "$APP" ]]; then
+            APP="$(find apps/desktop/src-tauri/target -type d -name 'CloneBins.app' | head -n 1)"
+          fi
+          if [[ ! -d "$APP" ]]; then
+            echo "CloneBins.app not found. Bundle tree:" >&2
+            find apps/desktop/src-tauri/target -maxdepth 6 -type d -print >&2 || true
+            exit 1
+          fi
+          mkdir -p dist/release
+          df -h .
+          apps/desktop/scripts/package-macos-dmg.sh \
+            dist/clonebins-api \
+            "$APP" \
+            "dist/release/CloneBins-0.1.0-macos-${{ matrix.arch }}.dmg"
+          ls -lh dist/release
+          file dist/release/*
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dmg-${{ matrix.arch }}
+          path: dist/release/CloneBins-0.1.0-macos-${{ matrix.arch }}.dmg
+          if-no-files-found: error
+
+  publish:
+    needs: macos-dmg
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+          path: dist/release
+
+      - name: List DMGs
+        run: ls -lh dist/release
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+          name: CloneBins ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+          draft: false
+          prerelease: false
+          fail_on_unmatched_files: true
+          files: |
+            dist/release/CloneBins-0.1.0-macos-arm64.dmg
+            dist/release/CloneBins-0.1.0-macos-x64.dmg
+          body: |
+            macOS desktop app: **CloneBins.app** inside each DMG.
+
+            | File | Mac |
+            | --- | --- |
+            | `CloneBins-0.1.0-macos-arm64.dmg` | Apple Silicon (M1/M2/M3/M4) |
+            | `CloneBins-0.1.0-macos-x64.dmg` | Intel |
+
+            **Not notarized.** First launch: right-click the app → Open, or allow it under
+            System Settings → Privacy & Security. Ad-hoc signed on GitHub Actions.
+
+            Each DMG includes a bundled `clonebins-api` sidecar (same `clonebins_core`
+            pipeline as the CLI). Clustering stays on your Mac; there is no cloud account.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

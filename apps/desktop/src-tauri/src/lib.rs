@@ -80,7 +80,10 @@ fn wait_for_api(timeout: Duration) -> bool {
 }
 
 fn spawn_sidecar() -> Result<Child, String> {
-    let mut cmd = if let Some(bin) = resolve_in_path("clonebins-api") {
+    let mut cmd = if let Some(bin) = bundled_api_bin() {
+        eprintln!("Using bundled clonebins-api at {}", bin.display());
+        Command::new(bin)
+    } else if let Some(bin) = resolve_in_path("clonebins-api") {
         Command::new(bin)
     } else {
         let py = python_bin()?;
@@ -100,6 +103,19 @@ fn spawn_sidecar() -> Result<Child, String> {
              (or set CLONEBINS_PYTHON to a Python that has those packages)."
         )
     })
+}
+
+/// Sidecar next to the executable (`CloneBins.app/Contents/MacOS/clonebins-api`).
+fn bundled_api_bin() -> Option<PathBuf> {
+    let exe = std::env::current_exe().ok()?;
+    let dir = exe.parent()?;
+    for name in ["clonebins-api", "clonebins-api.exe"] {
+        let candidate = dir.join(name);
+        if candidate.is_file() {
+            return Some(candidate);
+        }
+    }
+    None
 }
 
 fn python_bin() -> Result<PathBuf, String> {

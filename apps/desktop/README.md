@@ -80,22 +80,28 @@ npm run build
 
 ### macOS
 
-Same Node/Rust/Python steps, then:
+GitHub Actions (macOS runner) publishes **CloneBins.app inside a DMG** on
+[Releases](https://github.com/RecognizeYourPrivilege/CloneBins/releases) for
+**Apple Silicon** (`*-macos-arm64.dmg`) and **Intel** (`*-macos-x64.dmg`). That
+job is not this Linux VM. The app is ad-hoc signed, not notarized.
+
+To rebuild the same artifact on a Mac:
 
 ```bash
 cd apps/desktop
 npm install
-npm run build
+npx tauri build --bundles app
+# then scripts/package-macos-dmg.sh injects clonebins-api and wraps a DMG
 ```
 
 Produces `src-tauri/target/release/bundle/dmg/` and
-`src-tauri/target/release/macos/CloneBins.app`.
+`src-tauri/target/release/bundle/macos/CloneBins.app`. CI then copies a frozen
+`clonebins-api` sidecar into `Contents/MacOS/` and wraps a DMG (see
+`scripts/package-macos-dmg.sh`).
 
-Apple notarization / signing is **not** configured. For local use:
-`codesign --force --deep --sign - CloneBins.app` (ad-hoc) or run the unsigned
-app from Terminal (`open CloneBins.app`) and allow it in Privacy & Security.
-
-Minimum macOS: 12 (see `tauri.conf.json`).
+Apple notarization / Developer ID signing is **not** configured. For a local
+unsigned build: `codesign --force --deep --sign - CloneBins.app`, or right-click
+→ Open. Minimum macOS: 12.
 
 ## Privacy
 
