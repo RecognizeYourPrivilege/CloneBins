@@ -1,6 +1,6 @@
 # CloneBins desktop (Tauri 2)
 
-Native macOS + Linux window around the existing Vite/React UI. Clustering still
+Native macOS, Linux, and Windows window around the existing Vite/React UI. Clustering still
 runs in `clonebins_core` through the `clonebins-api` Python sidecar on
 `127.0.0.1:8765`. There is no cloud account.
 
@@ -34,8 +34,10 @@ field and a normal download.
   ```
 
   macOS: Xcode CLT (`xcode-select --install`). No extra GTK packages.
+  Windows: [WebView2](https://developer.microsoft.com/microsoft-edge/webview2/)
+  (Windows 11 includes it; the NSIS installer bootstraps it on Windows 10).
 
-## Dev (Linux or macOS)
+## Dev (Linux, macOS, or Windows)
 
 From the repo root:
 
@@ -80,6 +82,8 @@ GitHub Actions publishes installers on
 | `CloneBins-0.1.0-linux-x64.AppImage` | Generic glibc (`chmod +x` then run) |
 | `CloneBins-0.1.0-archlinux-x86_64.pkg.tar.zst` | Arch (`sudo pacman -U`) |
 | `CloneBins-0.1.0-alpine-x86_64.apk` | Alpine (`apk add --allow-untrusted`) |
+| `CloneBins-0.1.0-windows-x64-setup.exe` | Windows 10/11 NSIS |
+| `CloneBins-0.1.0-windows-x64.zip` | Windows portable zip |
 
 Ubuntu and Arch packages are the Tauri window plus a frozen `clonebins-api`
 sidecar in `/usr/bin`. Alpine is musl: the workflow tries a WebKit GUI and
@@ -129,6 +133,22 @@ Produces `src-tauri/target/release/bundle/dmg/` and
 Apple notarization / Developer ID signing is **not** configured. For a local
 unsigned build: `codesign --force --deep --sign - CloneBins.app`, or right-click
 → Open. Minimum macOS: 12.
+
+### Windows
+
+GitHub Actions (`windows-latest`) publishes an NSIS installer and a portable
+zip on [Releases](https://github.com/RecognizeYourPrivilege/CloneBins/releases).
+The zip is `CloneBins.exe` plus `clonebins-api.exe` in the same folder (the
+window looks next to the exe for the sidecar). Unsigned: SmartScreen may show
+More info → Run anyway.
+
+```bash
+cd apps/desktop
+npm install
+npx tauri build --bundles nsis --config src-tauri/windows-sidecar.tauri.conf.json
+```
+
+See `.github/workflows/release-windows.yml`.
 
 ## Privacy
 

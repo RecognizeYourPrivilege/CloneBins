@@ -47,7 +47,7 @@ See [docs/architecture.md](docs/architecture.md) for the longer plan.
 
 ## Requirements
 
-- Linux or macOS
+- Linux, macOS, or Windows 10/11
 - Python 3.10+
 - `pip` or [`uv`](https://docs.astral.sh/uv/)
 - Node 20+ (web + desktop)
@@ -216,7 +216,7 @@ account.
 
 ## Desktop app (Tauri 2)
 
-Native macOS + Linux window around the same web UI. The shell starts
+Native macOS, Linux, and Windows window around the same web UI. The shell starts
 `clonebins-api` on `127.0.0.1:8765` if it is not already running (Python sidecar;
 same `clonebins_core` pipeline). **Browse** picks a source folder; **Save zip…**
 writes the export with a native save dialog.
@@ -229,7 +229,8 @@ npm run dev
 ```
 
 Linux extra packages: `libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev patchelf`.
-macOS: Xcode command-line tools.
+macOS: Xcode command-line tools. Windows: WebView2 (the NSIS installer downloads
+it if missing; Windows 11 already has it).
 
 Release binary (no installer, good for VMs):
 
@@ -239,7 +240,7 @@ npm run build:unsigned
 # apps/desktop/src-tauri/target/release/clonebins-desktop
 ```
 
-GitHub Actions publishes Linux and macOS installers on
+GitHub Actions publishes Linux, macOS, and Windows installers on
 [Releases](https://github.com/RecognizeYourPrivilege/CloneBins/releases):
 
 | File | Platform |
@@ -250,10 +251,14 @@ GitHub Actions publishes Linux and macOS installers on
 | `CloneBins-0.1.0-linux-x64.AppImage` | Generic glibc Linux |
 | `CloneBins-0.1.0-archlinux-x86_64.pkg.tar.zst` | Arch |
 | `CloneBins-0.1.0-alpine-x86_64.apk` | Alpine (musl; GUI if WebKit built, else CLI + API) |
+| `CloneBins-0.1.0-windows-x64-setup.exe` | Windows 10/11 NSIS (current user) |
+| `CloneBins-0.1.0-windows-x64.zip` | Windows portable (`CloneBins.exe` + `clonebins-api.exe`) |
 
 macOS DMGs are not notarized — see
 [apps/desktop/README.md](apps/desktop/README.md). Alpine packages from CI are
-unsigned (`apk add --allow-untrusted`).
+unsigned (`apk add --allow-untrusted`). The Windows installer is unsigned;
+SmartScreen may warn (More info → Run anyway). Keep `clonebins-api.exe` next to
+`CloneBins.exe` if you use the zip.
 
 ## iOS app (SwiftUI)
 

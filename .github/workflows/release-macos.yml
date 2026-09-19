@@ -8,7 +8,7 @@ on:
     tags:
       - "v*"
     branches:
-      - cursor/linux-release-36e4
+      - main
   workflow_dispatch:
     inputs:
       tag:
@@ -172,6 +172,8 @@ jobs:
     needs: macos-dmg
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+
       - uses: actions/download-artifact@v4
         with:
           merge-multiple: true
@@ -201,20 +203,6 @@ jobs:
           files: |
             dist/release/CloneBins-0.1.0-macos-arm64.dmg
             dist/release/CloneBins-0.1.0-macos-x64.dmg
-          body: |
-            macOS desktop app: **CloneBins.app** inside each DMG.
-
-            | File | Mac |
-            | --- | --- |
-            | `CloneBins-0.1.0-macos-arm64.dmg` | Apple Silicon (M1/M2/M3/M4) |
-            | `CloneBins-0.1.0-macos-x64.dmg` | Intel |
-
-            **Includes the face+body clustering fix** (no more `all input arrays must have the same shape` when YuNet misses a face).
-
-            **Not notarized.** First launch: right-click the app → Open, or allow it under
-            System Settings → Privacy & Security. Ad-hoc signed on GitHub Actions.
-
-            Each DMG includes a bundled `clonebins-api` sidecar (same `clonebins_core`
-            pipeline as the CLI). Clustering stays on your Mac; there is no cloud account.
+          body_path: .github/release-notes-v0.1.0.md
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

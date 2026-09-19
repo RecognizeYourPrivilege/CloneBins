@@ -96,6 +96,12 @@ fn spawn_sidecar() -> Result<Child, String> {
         .stdin(Stdio::null())
         .stdout(Stdio::inherit())
         .stderr(Stdio::inherit());
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
     cmd.spawn().map_err(|err| {
         format!(
             "Failed to start clonebins-api sidecar ({err}). \
@@ -105,8 +111,8 @@ fn spawn_sidecar() -> Result<Child, String> {
     })
 }
 
-/// Sidecar next to the executable (`CloneBins.app/Contents/MacOS/clonebins-api`
-/// or `/usr/bin/clonebins-api` on Linux).
+/// Sidecar next to the executable (`CloneBins.app/Contents/MacOS/clonebins-api`,
+/// `/usr/bin/clonebins-api` on Linux, or `clonebins-api.exe` beside `CloneBins.exe`).
 fn bundled_api_bin() -> Option<PathBuf> {
     let exe = std::env::current_exe().ok()?;
     let dir = exe.parent()?;
