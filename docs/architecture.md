@@ -1,8 +1,8 @@
 # CloneBins architecture
 
 CloneBins is a **shared-core monorepo**: one Python clustering pipeline, thin
-clients. The core, CLI, and local web UI are implemented. Desktop and iOS remain
-stubs with the same folder contract.
+clients. Core, CLI, local web UI, and a Tauri 2 desktop shell are implemented.
+iOS remains a stub with the same folder contract.
 
 ## Why a shared core
 
@@ -14,11 +14,14 @@ not be reimplemented per platform. `packages/core` (`clonebins_core`) owns:
 3. Face detect + embed (default: OpenCV YuNet + SFace ONNX)
 4. Optional body/appearance embed (lightweight ReID-style histogram; CLIP later)
 5. Agglomerative clustering on cosine similarity
-6. Export to `output/<subject_prefix>_NN/` via copy or hardlink (CLI) or zip (web)
+6. Export to `output/<subject_prefix>_NN/` via copy or hardlink (CLI) or zip (web/desktop)
 
 `packages/cli` is a Typer wrapper: flags, progress, preview table, Ctrl-C.
 `packages/api` is a FastAPI wrapper: upload or local path, progress, rename /
 merge / split / exclude, zip download. Both call `run_pipeline()`.
+
+The desktop app is a Tauri 2 window around `apps/web`. It spawns `clonebins-api`
+as a loopback sidecar so clustering still happens in Python, not in Rust.
 
 ```
                     ┌─────────────────────┐
@@ -30,8 +33,10 @@ merge / split / exclude, zip download. Both call `run_pipeline()`.
             ▼         ▼       ▼        ▼          ▼
          CLI       FastAPI   Tauri    SwiftUI   (tests)
        (Typer)    (web API) sidecar   (iOS)
-                      │
+                      │         │
                       └── Vite / React (apps/web)
+                            ▲
+                            └── Tauri 2 loads this UI
 ```
 
 ## Stack choices
@@ -43,7 +48,7 @@ merge / split / exclude, zip download. Both call `run_pipeline()`.
 | Body / appearance | Histogram + spatial color grid (default); CLIP optional extra | `--mode face+body` is wired now without a 100MB+ download. Replace `AppearanceEmbedder` with CLIP / OSNet without touching cluster/export. |
 | Clustering | Average-linkage agglomerative clustering, cosine distance | `--threshold` maps cleanly to cosine similarity. HDBSCAN is a later option for unknown cluster counts with density noise. |
 | Web | Vite + React + TypeScript UI, local FastAPI (`clonebins-api`) | FastAPI imports `clonebins_core` directly. The browser only talks to localhost. Zip download of bins. |
-| Desktop (later) | Tauri 2 + React + Python sidecar | Wraps the web UI; sidecar is the same core. Native folder pickers, no Electron. |
+| Desktop | Tauri 2 wrapping `apps/web` + Python sidecar | Native window, folder picker, zip save. Sidecar is `clonebins-api` (same core). No Electron, no duplicated clustering. |
 | iOS (later) | SwiftUI | Thin client. On-device: Core ML conversion of YuNet/SFace (or Apple Vision). Same `subject_XX` export contract. |
 
 ## Offline-first / privacy
@@ -51,6 +56,8 @@ merge / split / exclude, zip download. Both call `run_pipeline()`.
 - Default path is **on-device / local disk only**.
 - No accounts, telemetry, or hosted APIs in v1.
 - The web UI is not a SaaS: it is a frontend for a process you run yourself.
+- The desktop sidecar binds `127.0.0.1` only and is stopped when the window exits
+  (unless you already had `clonebins-api` running).
 - Runtime does not need the network **after** YuNet + SFace weights are on disk
   (`~/.cache/clonebins/models`, overridable with `CLONEBINS_MODELS_DIR`).
 - First-time `clonebins models download` (or the first cluster run with model
@@ -77,7 +84,7 @@ CloneBins/
   packages/cli/      clonebins  (Typer)
   packages/api/      clonebins-api (FastAPI)
   apps/web/          Vite + React UI
-  apps/desktop/      placeholder (Tauri later)
+  apps/desktop/      Tauri 2 shell (reuses apps/web)
   apps/ios/          placeholder (SwiftUI later)
   docs/              this note
 ```

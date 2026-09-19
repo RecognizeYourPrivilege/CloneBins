@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import * as api from "./api";
+import { isTauriRuntime, pickDirectory } from "./desktop";
 import type { ClusterSettings, Health, Job, JobCluster, JobImage } from "./types";
 
 const DEFAULT_SETTINGS: ClusterSettings = {
@@ -18,8 +19,13 @@ export default function App() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [localPath, setLocalPath] = useState("");
+  const [desktop, setDesktop] = useState(false);
   const [selectedClusters, setSelectedClusters] = useState<Set<string>>(new Set());
   const [selectedImages, setSelectedImages] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    setDesktop(isTauriRuntime());
+  }, []);
 
   useEffect(() => {
     api.getHealth().then(setHealth).catch((err: Error) => setError(err.message));
@@ -69,6 +75,27 @@ export default function App() {
     if (!localPath.trim()) return;
     const created = await run(api.jobFromPath(localPath.trim()));
     if (created) await run(api.startCluster(created.id, settings));
+  }
+
+  async function onBrowseFolder() {
+    const path = await pickDirectory();
+    if (!path) return;
+    setLocalPath(path);
+    const created = await run(api.jobFromPath(path));
+    if (created) await run(api.startCluster(created.id, settings));
+  }
+
+  async function onDownloadZip() {
+    if (!job) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await api.downloadExportZip(job.id);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function onRecluster() {
@@ -139,11 +166,16 @@ export default function App() {
           <div className="path-row">
             <input
               type="text"
-              placeholder="Or a folder path on this machine"
+              placeholder={desktop ? "Folder on this machine" : "Or a folder path on this machine"}
               value={localPath}
               onChange={(e) => setLocalPath(e.target.value)}
               disabled={busy || clustering}
             />
+            {desktop && (
+              <button type="button" className="secondary-inline" disabled={busy || clustering} onClick={() => void onBrowseFolder()}>
+                Browse
+              </button>
+            )}
             <button type="button" disabled={busy || clustering || !localPath.trim()} onClick={() => void onPath()}>
               Use path
             </button>
@@ -251,9 +283,9 @@ export default function App() {
                 </button>
               )}
               {job && job.status === "done" && (
-                <a className="download" href={api.exportUrl(job.id)}>
-                  Download zip
-                </a>
+                <button type="button" className="download" disabled={busy} onClick={() => void onDownloadZip()}>
+                  {desktop ? "Save zip…" : "Download zip"}
+                </button>
               )}
             </div>
           </div>

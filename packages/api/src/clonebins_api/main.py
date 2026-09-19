@@ -27,13 +27,9 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://127.0.0.1:5173",
-        "http://localhost:5173",
-        "http://127.0.0.1:4173",
-        "http://localhost:4173",
-    ],
-    allow_credentials=True,
+    # Loopback-only server. Tauri webview origins vary (tauri://, http://tauri.localhost).
+    allow_origins=["*"],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -132,7 +128,11 @@ def export_zip(job_id: str) -> Response:
     )
 
 
-def run(host: str = "127.0.0.1", port: int = 8765) -> None:
+def run(host: str | None = None, port: int | None = None) -> None:
+    import os
+
     import uvicorn
 
-    uvicorn.run("clonebins_api.main:app", host=host, port=port, reload=False)
+    bind_host = host or os.environ.get("CLONEBINS_API_HOST", "127.0.0.1")
+    bind_port = port if port is not None else int(os.environ.get("CLONEBINS_API_PORT", "8765"))
+    uvicorn.run("clonebins_api.main:app", host=bind_host, port=bind_port, reload=False)

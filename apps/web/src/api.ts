@@ -1,5 +1,21 @@
 import type { ClusterSettings, Health, Job } from "./types";
 
+function isTauriRuntime(): boolean {
+  return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+}
+
+export function apiBase(): string {
+  const fromEnv = import.meta.env.VITE_CLONEBINS_API as string | undefined;
+  if (fromEnv) return fromEnv.replace(/\/$/, "");
+  // Packaged Tauri loads UI from a custom protocol; talk to the sidecar directly.
+  if (isTauriRuntime() && !import.meta.env.DEV) return "http://127.0.0.1:8765";
+  return "";
+}
+
+function apiUrl(path: string): string {
+  return `${apiBase()}${path}`;
+}
+
 async function parse<T>(res: Response): Promise<T> {
   if (!res.ok) {
     let detail = res.statusText;
@@ -15,18 +31,18 @@ async function parse<T>(res: Response): Promise<T> {
 }
 
 export async function getHealth(): Promise<Health> {
-  return parse<Health>(await fetch("/api/health"));
+  return parse<Health>(await fetch(apiUrl("/api/health")));
 }
 
 export async function uploadFiles(files: File[]): Promise<Job> {
   const body = new FormData();
   for (const file of files) body.append("files", file);
-  return parse<Job>(await fetch("/api/jobs/upload", { method: "POST", body }));
+  return parse<Job>(await fetch(apiUrl("/api/jobs/upload"), { method: "POST", body }));
 }
 
 export async function jobFromPath(path: string): Promise<Job> {
   return parse<Job>(
-    await fetch("/api/jobs/from-path", {
+    await fetch(apiUrl("/api/jobs/from-path"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ path }),
@@ -35,12 +51,12 @@ export async function jobFromPath(path: string): Promise<Job> {
 }
 
 export async function getJob(id: string): Promise<Job> {
-  return parse<Job>(await fetch(`/api/jobs/${id}`));
+  return parse<Job>(await fetch(apiUrl(`/api/jobs/${id}`)));
 }
 
 export async function startCluster(id: string, settings: ClusterSettings): Promise<Job> {
   return parse<Job>(
-    await fetch(`/api/jobs/${id}/cluster`, {
+    await fetch(apiUrl(`/api/jobs/${id}/cluster`), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(settings),
@@ -49,12 +65,12 @@ export async function startCluster(id: string, settings: ClusterSettings): Promi
 }
 
 export async function cancelJob(id: string): Promise<Job> {
-  return parse<Job>(await fetch(`/api/jobs/${id}/cancel`, { method: "POST" }));
+  return parse<Job>(await fetch(apiUrl(`/api/jobs/${id}/cancel`), { method: "POST" }));
 }
 
 export async function renameCluster(jobId: string, clusterId: string, name: string): Promise<Job> {
   return parse<Job>(
-    await fetch(`/api/jobs/${jobId}/clusters/${clusterId}`, {
+    await fetch(apiUrl(`/api/jobs/${jobId}/clusters/${clusterId}`), {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name }),
@@ -64,7 +80,7 @@ export async function renameCluster(jobId: string, clusterId: string, name: stri
 
 export async function setIncluded(jobId: string, clusterId: string, included: boolean): Promise<Job> {
   return parse<Job>(
-    await fetch(`/api/jobs/${jobId}/clusters/${clusterId}/include`, {
+    await fetch(apiUrl(`/api/jobs/${jobId}/clusters/${clusterId}/include`), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ included }),
@@ -74,7 +90,7 @@ export async function setIncluded(jobId: string, clusterId: string, included: bo
 
 export async function mergeClusters(jobId: string, clusterIds: string[]): Promise<Job> {
   return parse<Job>(
-    await fetch(`/api/jobs/${jobId}/merge`, {
+    await fetch(apiUrl(`/api/jobs/${jobId}/merge`), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ cluster_ids: clusterIds }),
@@ -84,7 +100,7 @@ export async function mergeClusters(jobId: string, clusterIds: string[]): Promis
 
 export async function extractImages(jobId: string, clusterId: string, imageIds: string[]): Promise<Job> {
   return parse<Job>(
-    await fetch(`/api/jobs/${jobId}/clusters/${clusterId}/extract`, {
+    await fetch(apiUrl(`/api/jobs/${jobId}/clusters/${clusterId}/extract`), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ image_ids: imageIds }),
@@ -94,7 +110,7 @@ export async function extractImages(jobId: string, clusterId: string, imageIds: 
 
 export async function excludeImages(jobId: string, imageIds: string[]): Promise<Job> {
   return parse<Job>(
-    await fetch(`/api/jobs/${jobId}/exclude`, {
+    await fetch(apiUrl(`/api/jobs/${jobId}/exclude`), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ image_ids: imageIds }),
@@ -103,9 +119,21 @@ export async function excludeImages(jobId: string, imageIds: string[]): Promise<
 }
 
 export function thumbUrl(jobId: string, imageId: string): string {
-  return `/api/jobs/${jobId}/thumbs/${imageId}`;
+  return apiUrl(`/api/jobs/${jobId}/thumbs/${imageId}`);
 }
 
 export function exportUrl(jobId: string): string {
-  return `/api/jobs/${jobId}/export.zip`;
+  return apiUrl(`/api/jobs/${jobId}/export.zip`);
+}
+
+export async function downloadExportZip(jobId: string): Promise<void> {
+  const { isTauriRuntime, saveZipBytes } = await import("./desktop");
+  if (isTauriRuntime()) {
+    const res = await fetch(exportUrl(jobId));
+    if (!res.ok) throw new Error("Zip export failed");
+    const bytes = new Uint8Array(await res.arrayBuffer());
+    await saveZipBytes(bytes);
+    return;
+  }
+  window.location.assign(exportUrl(jobId));
 }
