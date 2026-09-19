@@ -11,9 +11,13 @@ from clonebins_core.types import ClusterPlan, Naming, Placement
 _UNSAFE = re.compile(r"[^A-Za-z0-9_-]+")
 
 
-def safe_prefix(prefix: str) -> str:
-    cleaned = _UNSAFE.sub("_", prefix.strip()).strip("._-")
+def safe_folder_name(name: str) -> str:
+    cleaned = _UNSAFE.sub("_", name.strip()).strip("._-")
     return cleaned or "subject"
+
+
+def safe_prefix(prefix: str) -> str:
+    return safe_folder_name(prefix)
 
 
 def subject_name(prefix: str, index: int, total: int) -> str:

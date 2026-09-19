@@ -13,14 +13,30 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
       - name: Install packages
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -e packages/core -e packages/cli pytest
+          python -m pip install -e packages/core -e packages/cli -e packages/api pytest httpx
       - name: CLI smoke
+        env:
+          COLUMNS: "120"
+          NO_COLOR: "1"
+          TERM: dumb
         run: |
           clonebins --help
           clonebins cluster --help
           clonebins version
+      - name: API health
+        run: python -c "from fastapi.testclient import TestClient; from clonebins_api.main import app; r=TestClient(app).get('/api/health'); assert r.status_code==200 and r.json()['ok']"
       - name: Tests
+        env:
+          COLUMNS: "120"
+          NO_COLOR: "1"
+          TERM: dumb
         run: python -m pytest
+      - name: Web build
+        working-directory: apps/web
+        run: npm install && npm run build

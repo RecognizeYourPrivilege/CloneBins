@@ -3,8 +3,8 @@
 Cluster AI-generated images by **face** and **body/identity**, then drop each
 identity into its own folder for LoRA training datasets.
 
-v0.1 is a local CLI plus a shared Python core. Web, desktop, and iOS apps are
-scaffolded as placeholders — they will wrap the same core later.
+v0.1 is a local CLI, a local web UI, and a shared Python core. Desktop and iOS
+apps are still placeholders — they will wrap the same core later.
 
 Processing is **offline-first**: images never leave the machine. Face model
 weights are downloaded once (optional if you only need appearance clustering).
@@ -17,7 +17,8 @@ One shared core, four clients:
 | --- | --- | --- |
 | `packages/core` | **implemented** | Python: scan → embed → cluster → export |
 | `packages/cli` | **implemented** | Typer + Rich |
-| `apps/web` | placeholder | Vite/React + local FastAPI (later) |
+| `packages/api` | **implemented** | FastAPI, imports `clonebins_core` |
+| `apps/web` | **implemented** | Vite + React + TypeScript |
 | `apps/desktop` | placeholder | Tauri 2 + React + Python sidecar (later) |
 | `apps/ios` | placeholder | SwiftUI / Core ML (later) |
 
@@ -43,7 +44,7 @@ See [docs/architecture.md](docs/architecture.md) for the longer plan.
 From the repo root (editable, recommended):
 
 ```bash
-python3 -m pip install -e packages/core -e packages/cli
+python3 -m pip install -e packages/core -e packages/cli -e packages/api
 clonebins --help
 ```
 
@@ -146,6 +147,40 @@ clonebins cluster \
 Remove `--dry-run` to write bins. Prefer `--mode face` once models are
 downloaded.
 
+## Web app
+
+Local UI on top of the same core. The browser never talks to a cloud — only to
+the FastAPI process on this machine.
+
+1. Install core + API (CLI is optional for this path):
+
+   ```bash
+   python3 -m pip install -e packages/core -e packages/api
+   clonebins-api
+   ```
+
+   Listens on http://127.0.0.1:8765 (`GET /api/health`).
+
+2. In another terminal:
+
+   ```bash
+   cd apps/web
+   npm install
+   npm run dev
+   ```
+
+3. Open http://127.0.0.1:5173. Vite proxies `/api` to the FastAPI port.
+
+Flow: upload jpg/png/webp (corrupt files are skipped and listed) **or** type a
+folder path on this machine → set threshold / min-images / `face` vs
+`face+body` → preview bins with thumbnails → rename subjects, merge bins, split
+or exclude images → download `clonebins.zip` (`subject_XX/…`). Clustering is
+always a preview; nothing is written until you download the zip (that is the
+web equivalent of CLI `--dry-run` plus a later export).
+
+Privacy copy is in the header: processing is local / self-hosted, no cloud
+account.
+
 ## Example: prep a LoRA dataset
 
 Goal: 10–30 images of **one** character, consistent identity, local files only.
@@ -190,7 +225,7 @@ filesystem; CloneBins copies if linking fails.
 ## Development
 
 ```bash
-python3 -m pip install -e packages/core -e packages/cli pytest
+python3 -m pip install -e packages/core -e packages/cli -e packages/api pytest httpx
 python3 -m pytest
 ```
 
@@ -199,7 +234,9 @@ Layout:
 ```
 packages/core/     shared pipeline (clonebins_core)
 packages/cli/      Typer CLI (clonebins)
-apps/web|desktop|ios/   placeholders
+packages/api/      FastAPI (clonebins-api)
+apps/web/          Vite + React UI
+apps/desktop|ios/  placeholders
 docs/architecture.md
 tests/
 ```

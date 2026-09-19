@@ -43,6 +43,5 @@ demo_output/
 *.swp
 *~
 
-# Env files
-.env
-.env.*
+node_modules/
+apps/web/dist/
