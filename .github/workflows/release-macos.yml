@@ -64,13 +64,27 @@ jobs:
 
       - name: Install Python packages + PyInstaller
         run: |
-          python3 -m pip install --upgrade pip
-          python3 -m pip install -e packages/core -e packages/api pyinstaller
-          python3 -c "import platform; print(platform.machine(), platform.architecture())"
+          set -euo pipefail
+          PYTHON="${pythonLocation}/bin/python3"
+          "$PYTHON" -m pip install --upgrade pip
+          "$PYTHON" -m pip install -e packages/core -e packages/api pyinstaller
+          "$PYTHON" -c "import platform, sys; print(sys.executable, platform.machine(), platform.architecture())"
+          MACHINE="$("$PYTHON" -c 'import platform; print(platform.machine())')"
+          case "${{ matrix.arch }}" in
+            arm64) EXPECT=arm64 ;;
+            x64) EXPECT=x86_64 ;;
+          esac
+          if [[ "$MACHINE" != "$EXPECT" ]]; then
+            echo "Python arch is $MACHINE, expected $EXPECT for ${{ matrix.arch }}" >&2
+            file "$PYTHON" >&2
+            exit 1
+          fi
 
       - name: Freeze clonebins-api sidecar
         run: |
-          python3 -m PyInstaller \
+          set -euo pipefail
+          PYTHON="${pythonLocation}/bin/python3"
+          "$PYTHON" -m PyInstaller \
             --noconfirm --clean --onefile \
             --name clonebins-api \
             --hidden-import uvicorn.logging \
@@ -78,18 +92,20 @@ jobs:
             --hidden-import uvicorn.protocols.http.auto \
             --hidden-import uvicorn.protocols.websockets.auto \
             --hidden-import uvicorn.lifespan.on \
-            --collect-all uvicorn \
-            --collect-all fastapi \
-            --collect-all starlette \
-            --collect-all numpy \
-            --collect-all cv2 \
-            --collect-all sklearn \
-            --collect-all PIL \
+            --hidden-import sklearn.cluster \
+            --hidden-import sklearn.metrics.pairwise \
             --collect-all clonebins_core \
             --collect-all clonebins_api \
+            --exclude-module tkinter \
+            --exclude-module matplotlib \
+            --exclude-module sklearn.datasets \
+            --exclude-module sklearn.tests \
+            --exclude-module scipy.tests \
             packages/api/src/clonebins_api/__main__.py
+          rm -rf build
           file dist/clonebins-api
           ls -lh dist/clonebins-api
+          df -h .
 
       - name: Install JS deps
         run: |
@@ -115,12 +131,13 @@ jobs:
             exit 1
           fi
           mkdir -p dist/release
+          df -h .
           apps/desktop/scripts/package-macos-dmg.sh \
             dist/clonebins-api \
             "$APP" \
             "dist/release/CloneBins-0.1.0-macos-${{ matrix.arch }}.dmg"
           ls -lh dist/release
-          file "$APP/Contents/MacOS/"*
+          file dist/release/*
 
       - uses: actions/upload-artifact@v4
         with:
