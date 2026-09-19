@@ -10,6 +10,8 @@ const DEFAULT_SETTINGS: ClusterSettings = {
   subject_prefix: "subject",
   download_models: true,
   keep_names: true,
+  yunet: "2023mar",
+  sface: "2021dec",
 };
 
 export default function App() {
@@ -122,6 +124,7 @@ export default function App() {
   }
 
   const clustering = job?.status === "clustering";
+  const anyIncluded = Boolean(job?.clusters.some((c) => c.included));
   const progress = job?.progress;
   const pct =
     clustering && progress && progress.total > 0
@@ -146,7 +149,9 @@ export default function App() {
       {health && (
         <p className="health">
           API v{health.version}
-          {health.models_ready ? " · face models ready" : " · appearance fallback (download YuNet/SFace for faces)"}
+          {health.models_ready
+            ? " · face models ready (baked-in or cached ONNX)"
+            : " · appearance fallback (YuNet/SFace not in this container yet)"}
         </p>
       )}
 
@@ -192,6 +197,46 @@ export default function App() {
             >
               <option value="face">face</option>
               <option value="face+body">face+body</option>
+            </select>
+          </label>
+          <label className="field">
+            Face detector (YuNet)
+            <select
+              value={settings.yunet}
+              onChange={(e) =>
+                setSettings({ ...settings, yunet: e.target.value as ClusterSettings["yunet"] })
+              }
+            >
+              {(health?.models?.yunet ?? [
+                { id: "2023mar", label: "YuNet 2023 FP32", notes: "" },
+                { id: "2023mar_int8", label: "YuNet 2023 INT8", notes: "" },
+                { id: "2023mar_int8bq", label: "YuNet 2023 INT8-BQ", notes: "" },
+              ]).map((spec) => (
+                <option key={spec.id} value={spec.id}>
+                  {spec.label}
+                  {"ready" in spec && spec.ready === false ? " (not downloaded)" : ""}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="field">
+            Face recognizer (SFace)
+            <select
+              value={settings.sface}
+              onChange={(e) =>
+                setSettings({ ...settings, sface: e.target.value as ClusterSettings["sface"] })
+              }
+            >
+              {(health?.models?.sface ?? [
+                { id: "2021dec", label: "SFace 2021 FP32", notes: "" },
+                { id: "2021dec_int8", label: "SFace 2021 INT8", notes: "" },
+                { id: "2021dec_int8bq", label: "SFace 2021 INT8-BQ", notes: "" },
+              ]).map((spec) => (
+                <option key={spec.id} value={spec.id}>
+                  {spec.label}
+                  {"ready" in spec && spec.ready === false ? " (not downloaded)" : ""}
+                </option>
+              ))}
             </select>
           </label>
           <label className="field">
@@ -277,13 +322,34 @@ export default function App() {
               >
                 Exclude selected
               </button>
+              <button
+                type="button"
+                className="secondary-inline"
+                disabled={!job || clustering || job.clusters.length === 0}
+                onClick={() => job && void run(api.setIncludedAll(job.id, true))}
+              >
+                Include all in zip
+              </button>
+              <button
+                type="button"
+                className="secondary-inline"
+                disabled={!job || clustering || job.clusters.length === 0}
+                onClick={() => job && void run(api.setIncludedAll(job.id, false))}
+              >
+                Include none
+              </button>
               {job && clustering && (
                 <button type="button" className="danger" onClick={() => void run(api.cancelJob(job.id))}>
                   Cancel
                 </button>
               )}
               {job && job.status === "done" && (
-                <button type="button" className="download" disabled={busy} onClick={() => void onDownloadZip()}>
+                <button
+                  type="button"
+                  className="download"
+                  disabled={busy || !anyIncluded}
+                  onClick={() => void onDownloadZip()}
+                >
                   {desktop ? "Save zip…" : "Download zip"}
                 </button>
               )}
@@ -404,16 +470,37 @@ function ClusterCard({
           in zip
         </label>
       </header>
-      {cluster.below_min && <p className="warn">Below min-images — off by default, toggle “in zip” or merge.</p>}
+      {cluster.below_min && (
+        <p className="warn">Below min-images. Off by default — check “in zip” or Include all if you want it.</p>
+      )}
+      {!cluster.included && !cluster.below_min && (
+        <p className="meta">Not in the zip until you check “in zip” or Include all.</p>
+      )}
       <ul className="thumbs">
         {cluster.image_ids.map((id) => {
           const img = imagesById.get(id);
+          const fullUrl = api.imageUrl(jobId, id);
           return (
             <li key={id} className={selectedImages.has(id) ? "picked" : ""}>
-              <button type="button" disabled={disabled} onClick={() => onToggleImage(id)}>
+              <a
+                className="thumb-link"
+                href={fullUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                title="Open original in a new window. Click to select for split/exclude."
+                onClick={(e) => {
+                  if (!e.metaKey && !e.ctrlKey && !e.shiftKey && e.button === 0) {
+                    e.preventDefault();
+                    onToggleImage(id);
+                  }
+                }}
+              >
                 <img src={api.thumbUrl(jobId, id)} alt={img?.filename ?? id} />
                 <span>{img?.filename ?? id}</span>
-              </button>
+              </a>
+              <a className="open-full" href={fullUrl} target="_blank" rel="noopener noreferrer">
+                open ↗
+              </a>
             </li>
           );
         })}

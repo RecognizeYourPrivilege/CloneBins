@@ -1,0 +1,12 @@
+{
+  "bundle": {
+    "resources": {
+      "sidecars/clonebins-api.exe": "clonebins-api.exe"
+    },
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser"
+      }
+    }
+  }
+}

@@ -23,6 +23,8 @@ merge / split / exclude, zip download. Both call `run_pipeline()`.
 
 The desktop app is a Tauri 2 window around `apps/web`. It spawns `clonebins-api`
 as a loopback sidecar so clustering still happens in Python, not in Rust.
+GitHub Actions publishes Ubuntu `.deb` / AppImage, Arch `.pkg.tar.zst`,
+Windows NSIS/zip, and macOS DMGs with that sidecar next to the binary.
 
 The iOS app is a native SwiftUI client of that same FastAPI process. Photos you
 pick are uploaded to an API **you run** (Simulator → `127.0.0.1`; device → LAN
@@ -54,7 +56,7 @@ IP with `CLONEBINS_API_HOST=0.0.0.0`). It does not embed faces on-device in v1.
 | Body / appearance | Histogram + spatial color grid (default); CLIP optional extra | `--mode face+body` is wired now without a 100MB+ download. Replace `AppearanceEmbedder` with CLIP / OSNet without touching cluster/export. |
 | Clustering | Average-linkage agglomerative clustering, cosine distance | `--threshold` maps cleanly to cosine similarity. HDBSCAN is a later option for unknown cluster counts with density noise. |
 | Web | Vite + React + TypeScript UI, local FastAPI (`clonebins-api`) | FastAPI imports `clonebins_core` directly. The browser only talks to localhost. Zip download of bins. |
-| Desktop | Tauri 2 wrapping `apps/web` + Python sidecar | Native window, folder picker, zip save. Sidecar is `clonebins-api` (same core). No Electron, no duplicated clustering. |
+| Desktop | Tauri 2 wrapping `apps/web` + Python sidecar | Native window on macOS, Linux, and Windows; folder picker, zip save. Sidecar is `clonebins-api` (same core). No Electron, no duplicated clustering. |
 | iOS (v1) | SwiftUI + XcodeGen (`apps/ios`) | Photos/Files import, settings, cluster preview, rename/merge, zip share sheet. Talks to user-run `clonebins-api`. `OnDeviceEmbeddingBackend` / `CoreMLIdentityBackend` are stubs for a later YuNet+SFace (or Vision) path. Linux cannot `xcodebuild`. |
 
 ## Offline-first / privacy
@@ -79,8 +81,13 @@ IP with `CLONEBINS_API_HOST=0.0.0.0`). It does not embed faces on-device in v1.
 - One embedding per image. If several faces are found, the **largest** box is used
   (typical for character portraits).
 - `face` mode: drop images with no face embedding into the unmatched set.
-- `face+body`: concatenate face ⊕ appearance (face-weighted). No face →
-  appearance only, so stylized gens still bin by look.
+- `face+body`: concatenate face ⊕ appearance (face-weighted). No face → zero
+  face half + appearance, so every row is the same length (mixed folders used
+  to crash with ``all input arrays must have the same shape``). Stylized gens
+  still bin by look.
+- Web zip export: bins start unchecked; include individually or via Include all.
+- Detector/recognizer: YuNet 2023 FP32 / INT8 / INT8-BQ and SFace 2021 FP32 /
+  INT8 / INT8-BQ from opencv_zoo (Hugging Face mirrors). Docker bakes all six.
 - `min-images`: clusters smaller than the cutoff are reported and not exported
   by default (web: shown as “below min”, off in the zip until you include or merge).
 - Folder names are filesystem-safe: `subject_01`, `subject_02`, … (prefix
