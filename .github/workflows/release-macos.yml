@@ -1,11 +1,14 @@
 # Builds CloneBins.app on GitHub-hosted macOS (Apple Silicon + Intel) and
 # publishes both DMGs on a GitHub Release. Linux cannot produce a .app.
+# Rebuilds replace CloneBins-0.1.0-macos-arm64.dmg and macos-x64.dmg only.
 name: Release macOS DMG
 
 on:
   push:
     tags:
       - "v*"
+    branches:
+      - cursor/linux-release-36e4
   workflow_dispatch:
     inputs:
       tag:
@@ -19,6 +22,9 @@ permissions:
 concurrency:
   group: release-macos
   cancel-in-progress: true
+
+env:
+  RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || (startsWith(github.ref, 'refs/tags/') && github.ref_name || 'v0.1.0') }}
 
 jobs:
   macos-dmg:
@@ -174,11 +180,21 @@ jobs:
       - name: List DMGs
         run: ls -lh dist/release
 
+      - name: Delete previous macOS DMGs on v0.1.0
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          TAG="${{ env.RELEASE_TAG }}"
+          gh release view "$TAG" --json assets --jq '.assets[].name' || true
+          gh release delete-asset "$TAG" CloneBins-0.1.0-macos-arm64.dmg --yes || true
+          gh release delete-asset "$TAG" CloneBins-0.1.0-macos-x64.dmg --yes || true
+
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
-          name: CloneBins ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+          tag_name: ${{ env.RELEASE_TAG }}
+          name: CloneBins ${{ env.RELEASE_TAG }}
           draft: false
           prerelease: false
           fail_on_unmatched_files: true
@@ -192,6 +208,8 @@ jobs:
             | --- | --- |
             | `CloneBins-0.1.0-macos-arm64.dmg` | Apple Silicon (M1/M2/M3/M4) |
             | `CloneBins-0.1.0-macos-x64.dmg` | Intel |
+
+            **Includes the face+body clustering fix** (no more `all input arrays must have the same shape` when YuNet misses a face).
 
             **Not notarized.** First launch: right-click the app → Open, or allow it under
             System Settings → Privacy & Security. Ad-hoc signed on GitHub Actions.
