@@ -12,6 +12,15 @@ pick to a **clonebins-api you run** (Mac loopback or LAN) — not a vendor cloud
 Face model weights are downloaded once on the API/CLI host (optional if you
 only need appearance clustering).
 
+## Demo
+
+Local web UI: cluster two identities, rename `subject_01` → `hero_main`, skip a
+corrupt file, download `clonebins.zip`.
+
+![CloneBins web UI with clustered bins and Download zip](docs/demo/web_ui_clusters_zip.png)
+
+[Screen recording (cluster → rename → zip)](docs/demo/web_cluster_rename_zip.mp4)
+
 ## Architecture (short)
 
 One shared core, four clients:
