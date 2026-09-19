@@ -7,7 +7,7 @@ requires-python = ">=3.10"
 license = { text = "MIT" }
 authors = [{ name = "CloneBins contributors" }]
 dependencies = [
-  "clonebins-core @ file:../core",
+  "clonebins-core",
   "typer>=0.12",
   "rich>=13.7",
 ]
