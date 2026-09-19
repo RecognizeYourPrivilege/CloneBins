@@ -37,3 +37,8 @@ def test_readme_has_docker_quick_start() -> None:
     dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
     assert "clonebins-api" in dockerfile
     assert "clonebins_core.models --all" in dockerfile
+
+
+def test_readme_does_not_include_alpine() -> None:
+    assert "alpine" not in README.lower()
+    assert "Alpine" not in README

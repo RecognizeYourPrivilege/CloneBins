@@ -279,15 +279,13 @@ GitHub Actions publishes Linux, macOS, and Windows installers on
 | `CloneBins-0.1.0-ubuntu-amd64.deb` | Ubuntu / Debian |
 | `CloneBins-0.1.0-linux-x64.AppImage` | Generic glibc Linux |
 | `CloneBins-0.1.0-archlinux-x86_64.pkg.tar.zst` | Arch |
-| `CloneBins-0.1.0-alpine-x86_64.apk` | Alpine (musl; GUI if WebKit built, else CLI + API) |
 | `CloneBins-0.1.0-windows-x64-setup.exe` | Windows 10/11 NSIS (current user) |
 | `CloneBins-0.1.0-windows-x64.zip` | Windows portable (`CloneBins.exe` + `clonebins-api.exe`) |
 
 macOS DMGs are not notarized — see
-[apps/desktop/README.md](apps/desktop/README.md). Alpine packages from CI are
-unsigned (`apk add --allow-untrusted`). The Windows installer is unsigned;
-SmartScreen may warn (More info → Run anyway). Keep `clonebins-api.exe` next to
-`CloneBins.exe` if you use the zip.
+[apps/desktop/README.md](apps/desktop/README.md). The Windows installer is
+unsigned; SmartScreen may warn (More info → Run anyway). Keep
+`clonebins-api.exe` next to `CloneBins.exe` if you use the zip.
 
 ## iOS app (SwiftUI)
 
