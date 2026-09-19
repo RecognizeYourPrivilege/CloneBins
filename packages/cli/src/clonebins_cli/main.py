@@ -12,7 +12,17 @@ from rich.progress import BarColumn, Progress, SpinnerColumn, TaskID, TextColumn
 from rich.table import Table
 
 from clonebins_core.cluster import DEFAULT_THRESHOLD
-from clonebins_core.models import default_models_dir, ensure_face_models, models_present
+from clonebins_core.models import (
+    DEFAULT_SFACE_ID,
+    DEFAULT_YUNET_ID,
+    SFACE_BY_ID,
+    YUNET_BY_ID,
+    catalog_status,
+    default_models_dir,
+    download_all_face_models,
+    ensure_face_models,
+    models_present,
+)
 from clonebins_core.pipeline import PipelineConfig, run_pipeline
 from clonebins_core.types import ClusterMode, ClusterPlan, Naming, Placement
 
@@ -157,6 +167,14 @@ def cluster(
         bool,
         typer.Option("--recursive/--no-recursive", help="Scan input subfolders (default: on)."),
     ] = True,
+    yunet: Annotated[
+        str,
+        typer.Option("--yunet", help="YuNet detector: 2023mar | 2023mar_int8 | 2023mar_int8bq."),
+    ] = DEFAULT_YUNET_ID,
+    sface: Annotated[
+        str,
+        typer.Option("--sface", help="SFace recognizer: 2021dec | 2021dec_int8 | 2021dec_int8bq."),
+    ] = DEFAULT_SFACE_ID,
 ) -> None:
     """Scan an image folder, cluster identities, and write output/<subject>/ bins."""
     cluster_mode = _parse_mode(mode)
@@ -164,6 +182,11 @@ def cluster(
         raise typer.BadParameter("--min-images must be >= 1")
     if not 0.0 <= threshold <= 1.0:
         raise typer.BadParameter("--threshold must be between 0 and 1 (cosine similarity)")
+
+    if yunet not in YUNET_BY_ID:
+        raise typer.BadParameter(f"--yunet must be one of: {', '.join(YUNET_BY_ID)}")
+    if sface not in SFACE_BY_ID:
+        raise typer.BadParameter(f"--sface must be one of: {', '.join(SFACE_BY_ID)}")
 
     config = PipelineConfig(
         input_dir=input_dir,
@@ -177,6 +200,8 @@ def cluster(
         subject_prefix=subject_prefix,
         recursive=recursive,
         download_models=not no_download,
+        yunet_id=yunet,
+        sface_id=sface,
     )
 
     try:
@@ -236,9 +261,13 @@ def models_path() -> None:
 def models_status() -> None:
     """Check whether YuNet + SFace weights are present locally."""
     directory = default_models_dir()
-    ok = models_present(directory)
-    console.print(f"{directory}  ({'ready' if ok else 'missing'})")
-    raise typer.Exit(code=0 if ok else 1)
+    catalog = catalog_status(directory)
+    console.print(f"{directory}")
+    for family in ("yunet", "sface"):
+        for spec in catalog[family]:
+            mark = "ready" if spec["ready"] else "missing"
+            console.print(f"  {family} {spec['id']}: {mark}  ({spec['label']})")
+    raise typer.Exit(code=0 if models_present(directory) else 1)
 
 
 @models_app.command("download")
@@ -247,10 +276,26 @@ def models_download(
         Optional[Path],
         typer.Option("--dir", help="Override CLONEBINS_MODELS_DIR."),
     ] = None,
+    all_variants: Annotated[
+        bool,
+        typer.Option("--all", help="Download every YuNet and SFace ONNX variant."),
+    ] = False,
+    yunet: Annotated[str, typer.Option("--yunet")] = DEFAULT_YUNET_ID,
+    sface: Annotated[str, typer.Option("--sface")] = DEFAULT_SFACE_ID,
 ) -> None:
     """Download YuNet + SFace ONNX weights into the local cache (one-time network)."""
     try:
-        paths = ensure_face_models(models_dir=models_dir, download=True, log=err_console.print)
+        if all_variants:
+            root = download_all_face_models(models_dir=models_dir, log=err_console.print)
+            console.print(f"All variants in {root}")
+            return
+        paths = ensure_face_models(
+            models_dir=models_dir,
+            download=True,
+            log=err_console.print,
+            yunet_id=yunet,
+            sface_id=sface,
+        )
     except Exception as exc:
         err_console.print(f"[red]{exc}[/red]")
         raise typer.Exit(code=1) from exc

@@ -1,11 +1,14 @@
 # Builds CloneBins.app on GitHub-hosted macOS (Apple Silicon + Intel) and
 # publishes both DMGs on a GitHub Release. Linux cannot produce a .app.
+# Rebuilds replace CloneBins-0.1.0-macos-arm64.dmg and macos-x64.dmg only.
 name: Release macOS DMG
 
 on:
   push:
     tags:
       - "v*"
+    branches:
+      - main
   workflow_dispatch:
     inputs:
       tag:
@@ -19,6 +22,9 @@ permissions:
 concurrency:
   group: release-macos
   cancel-in-progress: true
+
+env:
+  RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || (startsWith(github.ref, 'refs/tags/') && github.ref_name || 'v0.1.0') }}
 
 jobs:
   macos-dmg:
@@ -166,6 +172,8 @@ jobs:
     needs: macos-dmg
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+
       - uses: actions/download-artifact@v4
         with:
           merge-multiple: true
@@ -174,29 +182,27 @@ jobs:
       - name: List DMGs
         run: ls -lh dist/release
 
+      - name: Delete previous macOS DMGs on v0.1.0
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          TAG="${{ env.RELEASE_TAG }}"
+          gh release view "$TAG" --json assets --jq '.assets[].name' || true
+          gh release delete-asset "$TAG" CloneBins-0.1.0-macos-arm64.dmg --yes || true
+          gh release delete-asset "$TAG" CloneBins-0.1.0-macos-x64.dmg --yes || true
+
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
-          name: CloneBins ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+          tag_name: ${{ env.RELEASE_TAG }}
+          name: CloneBins ${{ env.RELEASE_TAG }}
           draft: false
           prerelease: false
           fail_on_unmatched_files: true
           files: |
             dist/release/CloneBins-0.1.0-macos-arm64.dmg
             dist/release/CloneBins-0.1.0-macos-x64.dmg
-          body: |
-            macOS desktop app: **CloneBins.app** inside each DMG.
-
-            | File | Mac |
-            | --- | --- |
-            | `CloneBins-0.1.0-macos-arm64.dmg` | Apple Silicon (M1/M2/M3/M4) |
-            | `CloneBins-0.1.0-macos-x64.dmg` | Intel |
-
-            **Not notarized.** First launch: right-click the app → Open, or allow it under
-            System Settings → Privacy & Security. Ad-hoc signed on GitHub Actions.
-
-            Each DMG includes a bundled `clonebins-api` sidecar (same `clonebins_core`
-            pipeline as the CLI). Clustering stays on your Mac; there is no cloud account.
+          body_path: .github/release-notes-v0.1.0.md
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

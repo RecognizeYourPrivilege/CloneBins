@@ -5,9 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-import numpy as np
-
 from clonebins_core.cluster import DEFAULT_THRESHOLD, cluster_embeddings
+from clonebins_core.embed import stack_embeddings
 from clonebins_core.embed.factory import HybridEmbedder, build_embedder
 from clonebins_core.export import export_plan, subject_name
 from clonebins_core.io import load_image_bgr
@@ -37,6 +36,8 @@ class PipelineConfig:
     recursive: bool = True
     download_models: bool = True
     models_dir: Path | None = None
+    yunet_id: str = "2023mar"
+    sface_id: str = "2021dec"
     embedder: HybridEmbedder | None = None
 
 
@@ -57,6 +58,8 @@ def run_pipeline(config: PipelineConfig, progress: ProgressReporter | None = Non
             download_models=config.download_models,
             models_dir=config.models_dir,
             log=reporter.log,
+            yunet_id=config.yunet_id,
+            sface_id=config.sface_id,
         )
 
     records: list[ImageRecord] = []
@@ -150,7 +153,7 @@ def _build_plan(
     if not usable:
         return plan
 
-    matrix = np.stack([r.embedding for r in usable], axis=0)
+    matrix = stack_embeddings([r.embedding for r in usable if r.embedding is not None])
     labels = cluster_embeddings(matrix, threshold=threshold)
 
     grouped: dict[int, list[ImageRecord]] = {}

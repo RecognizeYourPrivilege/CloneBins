@@ -6,6 +6,9 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+YunNetId = Literal["2023mar", "2023mar_int8", "2023mar_int8bq"]
+SFaceId = Literal["2021dec", "2021dec_int8", "2021dec_int8bq"]
+
 
 class ClusterSettings(BaseModel):
     threshold: float = Field(default=0.45, ge=0.0, le=1.0)
@@ -14,6 +17,8 @@ class ClusterSettings(BaseModel):
     subject_prefix: str = "subject"
     download_models: bool = True
     keep_names: bool = True
+    yunet: YunNetId = "2023mar"
+    sface: SFaceId = "2021dec"
 
 
 class PathRequest(BaseModel):

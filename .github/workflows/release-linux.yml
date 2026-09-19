@@ -1,0 +1,230 @@
+# Builds Linux installers (Ubuntu .deb + AppImage, Arch pkg.tar.zst)
+# and attaches them to a GitHub Release without replacing macOS/Windows assets.
+name: Release Linux
+
+on:
+  push:
+    tags:
+      - "v*"
+    branches:
+      - main
+      - cursor/linux-release-36e4
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to create or reuse (e.g. v0.1.0)"
+        required: true
+        default: "v0.1.0"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-linux
+  cancel-in-progress: true
+
+env:
+  CLONEBINS_VERSION: "0.1.0"
+  RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || (startsWith(github.ref, 'refs/tags/') && github.ref_name || 'v0.1.0') }}
+
+jobs:
+  ubuntu:
+    name: ubuntu-deb
+    runs-on: ubuntu-22.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: |
+            apps/web/package-lock.json
+            apps/desktop/package-lock.json
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop/src-tauri
+          key: ubuntu-22.04
+
+      - name: Install GTK / WebKit / dpkg
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev patchelf libssl-dev \
+            libayatana-appindicator3-dev file dpkg-dev zstd libarchive-tools \
+            libfuse2 wget
+
+      - name: Freeze clonebins-api sidecar
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e packages/core -e packages/api pyinstaller
+          chmod +x apps/desktop/scripts/freeze-python-bin.sh
+          apps/desktop/scripts/freeze-python-bin.sh api python
+          mkdir -p apps/desktop/src-tauri/sidecars
+          cp dist/clonebins-api apps/desktop/src-tauri/sidecars/clonebins-api
+          chmod +x apps/desktop/src-tauri/sidecars/clonebins-api
+
+      - name: Install JS deps
+        run: |
+          npm ci --prefix apps/web
+          npm ci --prefix apps/desktop
+
+      - name: Build Tauri deb + AppImage
+        working-directory: apps/desktop
+        run: |
+          npx tauri build --bundles deb,appimage --config src-tauri/linux-sidecar.tauri.conf.json
+
+      - name: Collect Ubuntu artifacts
+        run: |
+          set -euo pipefail
+          mkdir -p dist/release
+          chmod +x apps/desktop/scripts/package-linux.sh
+          DEB="$(find apps/desktop/src-tauri/target -type f -name '*.deb' | head -n 1 || true)"
+          APPIMAGE="$(find apps/desktop/src-tauri/target -type f -name '*.AppImage' | head -n 1 || true)"
+          DESKTOP_BIN="apps/desktop/src-tauri/target/release/clonebins-desktop"
+          if [[ -n "${DEB:-}" ]]; then
+            if dpkg-deb -c "$DEB" | grep -q 'usr/bin/clonebins-api'; then
+              cp "$DEB" dist/release/CloneBins-0.1.0-ubuntu-amd64.deb
+            else
+              apps/desktop/scripts/package-linux.sh inject-deb \
+                --deb "$DEB" \
+                --api dist/clonebins-api \
+                --out dist/release/CloneBins-0.1.0-ubuntu-amd64.deb
+            fi
+          else
+            echo "Tauri did not write a .deb; packaging from the raw binary" >&2
+            test -x "$DESKTOP_BIN"
+            apps/desktop/scripts/package-linux.sh deb \
+              --desktop "$DESKTOP_BIN" \
+              --api dist/clonebins-api \
+              --out dist/release/CloneBins-0.1.0-ubuntu-amd64.deb
+          fi
+          if [[ -n "${APPIMAGE:-}" ]]; then
+            OUT_APP=dist/release/CloneBins-0.1.0-linux-x64.AppImage
+            if grep -a -q clonebins-api "$APPIMAGE"; then
+              cp "$APPIMAGE" "$OUT_APP"
+            else
+              echo "AppImage missing sidecar; attempting inject" >&2
+              TOOL="$(find "$HOME" apps/desktop/src-tauri -name 'appimagetool*' -type f 2>/dev/null | head -n 1 || true)"
+              if [[ -z "$TOOL" ]]; then
+                wget -q -O /tmp/appimagetool.AppImage \
+                  https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
+                chmod +x /tmp/appimagetool.AppImage
+                TOOL=/tmp/appimagetool.AppImage
+              fi
+              APPIMAGETOOL="$TOOL" apps/desktop/scripts/package-linux.sh inject-appimage \
+                --appimage "$APPIMAGE" \
+                --api dist/clonebins-api \
+                --out "$OUT_APP" || cp "$APPIMAGE" "$OUT_APP"
+            fi
+            chmod +x "$OUT_APP"
+          fi
+          ls -lh dist/release
+          dpkg-deb -c dist/release/CloneBins-0.1.0-ubuntu-amd64.deb | grep usr/bin
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-ubuntu
+          path: dist/release/*
+          if-no-files-found: error
+
+  arch:
+    name: arch-pkg
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    container:
+      image: archlinux:latest
+    steps:
+      - name: Install build deps
+        run: |
+          pacman -Sy --noconfirm archlinux-keyring
+          pacman -Syu --noconfirm
+          pacman -S --noconfirm --needed \
+            git curl wget base-devel \
+            webkit2gtk-4.1 gtk3 librsvg libappindicator-gtk3 \
+            openssl patchelf pkgconf clang \
+            nodejs npm rust \
+            python python-pip python-setuptools python-virtualenv \
+            zstd libarchive file
+
+      - uses: actions/checkout@v4
+
+      - name: Freeze clonebins-api sidecar
+        run: |
+          python -m venv /tmp/cbvenv || virtualenv /tmp/cbvenv
+          /tmp/cbvenv/bin/pip install --upgrade pip
+          /tmp/cbvenv/bin/pip install -e packages/core -e packages/api pyinstaller
+          chmod +x apps/desktop/scripts/freeze-python-bin.sh
+          apps/desktop/scripts/freeze-python-bin.sh api /tmp/cbvenv/bin/python
+
+      - name: Install JS deps
+        run: |
+          npm ci --prefix apps/web
+          npm ci --prefix apps/desktop
+
+      - name: Build Tauri binary (no bundle)
+        working-directory: apps/desktop
+        run: npx tauri build --no-bundle
+
+      - name: Wrap Arch package
+        run: |
+          set -euo pipefail
+          mkdir -p dist/release
+          chmod +x apps/desktop/scripts/package-linux.sh
+          DESKTOP_BIN="apps/desktop/src-tauri/target/release/clonebins-desktop"
+          test -x "$DESKTOP_BIN"
+          apps/desktop/scripts/package-linux.sh arch \
+            --desktop "$DESKTOP_BIN" \
+            --api dist/clonebins-api \
+            --out dist/release/CloneBins-0.1.0-archlinux-x86_64.pkg.tar.zst
+          tar -tf dist/release/CloneBins-0.1.0-archlinux-x86_64.pkg.tar.zst | grep usr/bin
+          ls -lh dist/release
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-arch
+          path: dist/release/*
+          if-no-files-found: error
+
+  publish:
+    needs: [ubuntu, arch]
+    if: ${{ !cancelled() && (needs.ubuntu.result == 'success' || needs.arch.result == 'success') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        if: needs.ubuntu.result == 'success'
+        with:
+          name: linux-ubuntu
+          path: dist/release
+
+      - uses: actions/download-artifact@v4
+        if: needs.arch.result == 'success'
+        with:
+          name: linux-arch
+          path: dist/release
+
+      - name: List artifacts
+        run: ls -lh dist/release
+
+      - name: Publish Ubuntu / Arch GitHub Release assets
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          name: CloneBins ${{ env.RELEASE_TAG }}
+          draft: false
+          prerelease: false
+          fail_on_unmatched_files: false
+          files: dist/release/*
+          body_path: .github/release-notes-v0.1.0.md
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

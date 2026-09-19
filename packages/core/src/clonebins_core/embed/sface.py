@@ -15,6 +15,7 @@ class SFaceEmbedder:
     """Default face backend. InsightFace can replace this class later."""
 
     name = "yunet-sface"
+    embedding_dim = 128
 
     def __init__(self, models: FaceModelPaths, score_threshold: float = 0.6) -> None:
         self.models = models
@@ -30,6 +31,7 @@ class SFaceEmbedder:
             nms_threshold=0.3,
         )
         self._recognizer = cv2.FaceRecognizerSF.create(str(models.sface), "")
+        self.name = f"yunet-{models.yunet_id}+sface-{models.sface_id}"
 
     def embed(self, image_bgr: np.ndarray) -> EmbedResult:
         faces = self._detect(image_bgr)
@@ -46,6 +48,8 @@ class SFaceEmbedder:
             return EmbedResult(embedding=None, faces_found=int(len(faces)))
 
         vec = l2_normalize(np.asarray(feature, dtype=np.float32))
+        if vec.size == 0:
+            return EmbedResult(embedding=None, faces_found=int(len(faces)))
         return EmbedResult(embedding=vec, faces_found=int(len(faces)), used_face=True)
 
     def _detect(self, image_bgr: np.ndarray) -> np.ndarray | None:

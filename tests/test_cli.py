@@ -7,7 +7,6 @@ from typer.testing import CliRunner
 from clonebins_cli.main import app
 from portraits import write_identity_set
 from conftest import visible_help
-from conftest import visible_help
 
 runner = CliRunner()
 
@@ -29,6 +28,8 @@ def test_cluster_help():
     assert "--hardlink" in text
     assert "--rename-index" in text
     assert "--subject-prefix" in text
+    assert "--yunet" in text
+    assert "--sface" in text
 
 
 def test_cluster_end_to_end(tmp_path: Path):

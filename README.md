@@ -17,9 +17,47 @@ only need appearance clustering).
 Local web UI: cluster two identities, rename `subject_01` → `hero_main`, skip a
 corrupt file, download `clonebins.zip`.
 
-<img alt="CloneBins web UI with clustered bins and Download zip" src="./docs/demo/web_ui_clusters_zip.png" width="900" />
+![CloneBins web UI with clustered bins and Download zip](docs/demo/web_ui_clusters_zip.png)
 
-<img alt="Screen recording: cluster, rename hero_main, download zip" src="./docs/demo/web_cluster_rename_zip.gif" width="900" />
+[![Demo: cluster, rename hero_main, download zip](docs/demo/web_cluster_rename_zip.gif)](docs/demo/web_cluster_rename_zip.mp4)
+
+The GIF plays inline on GitHub. Click it for the [full-length MP4](docs/demo/web_cluster_rename_zip.mp4).
+
+## Docker (web UI)
+
+One command runs the API, the Vite-built UI, and **all six** opencv_zoo ONNX
+weights (3 YuNet + 3 SFace) baked into the image. No separate `clonebins-api`
+process, no Node toolchain.
+
+```bash
+docker compose up --build
+```
+
+Open **http://127.0.0.1:8765**.
+
+| Piece | In the image |
+| --- | --- |
+| UI | `apps/web` production build, served by FastAPI |
+| API | `clonebins-api` on `0.0.0.0:8765` |
+| YuNet | `2023mar` FP32 (default), `2023mar_int8`, `2023mar_int8bq` |
+| SFace | `2021dec` FP32 (default), `2021dec_int8`, `2021dec_int8bq` |
+
+Files: [`Dockerfile`](Dockerfile), [`docker-compose.yml`](docker-compose.yml).
+Weights come from Hugging Face (`opencv/face_detection_yunet`,
+`opencv/face_recognition_sface`) at build time, with GitHub LFS mirrors as
+fallback. After the image exists, clustering does not need the network.
+
+In the UI: pick detector/recognizer in Settings. Bins start **unchecked** for
+the zip — use **Include all in zip** or tick **in zip**. **open ↗** (or
+Ctrl/Cmd-click) loads the original in a new tab.
+
+To cluster a folder on the host, uncomment the volume in
+`docker-compose.yml` and type that path in the UI:
+
+```yaml
+volumes:
+  - ${HOME}/gens:/data:ro
+```
 
 ## Architecture (short)
 
@@ -47,7 +85,7 @@ See [docs/architecture.md](docs/architecture.md) for the longer plan.
 
 ## Requirements
 
-- Linux or macOS
+- Linux, macOS, or Windows 10/11
 - Python 3.10+
 - `pip` or [`uv`](https://docs.astral.sh/uv/)
 - Node 20+ (web + desktop)
@@ -72,16 +110,22 @@ uv run clonebins --help
 
 ## Face models (one-time, optional)
 
-Default face clustering uses two local ONNX weights from the OpenCV zoo:
+Default face clustering uses two local ONNX weights from the OpenCV zoo
+(Hugging Face `opencv/face_detection_yunet` and `opencv/face_recognition_sface`).
+Each family has three variants; the Docker web image embeds all six:
 
-- YuNet face detector (`face_detection_yunet_2023mar.onnx`)
-- SFace recognizer (`face_recognition_sface_2021dec.onnx`)
+| Detector (YuNet) | Recognizer (SFace) |
+| --- | --- |
+| `2023mar` FP32 (default) | `2021dec` FP32 (default) |
+| `2023mar_int8` faster | `2021dec_int8` faster |
+| `2023mar_int8bq` block-quant | `2021dec_int8bq` block-quant |
 
 They are stored in `~/.cache/clonebins/models` (override with
 `CLONEBINS_MODELS_DIR`). After they exist, **no network is used**.
 
 ```bash
-clonebins models download
+clonebins models download          # default FP32 pair
+clonebins models download --all    # all six ONNX files
 clonebins models status
 ```
 
@@ -186,19 +230,22 @@ the FastAPI process on this machine.
 
 3. Open http://127.0.0.1:5173. Vite proxies `/api` to the FastAPI port.
 
+Prefer Docker for a one-shot UI (models included): see [Docker (web UI)](#docker-web-ui).
+
 Flow: upload jpg/png/webp (corrupt files are skipped and listed) **or** type a
 folder path on this machine → set threshold / min-images / `face` vs
 `face+body` → preview bins with thumbnails → rename subjects, merge bins, split
 or exclude images → download `clonebins.zip` (`subject_XX/…`). Clustering is
 always a preview; nothing is written until you download the zip (that is the
-web equivalent of CLI `--dry-run` plus a later export).
+web equivalent of CLI `--dry-run` plus a later export). Bins start **unchecked**
+for the zip; **Include all in zip** / **open ↗** as in the Docker section.
 
 Privacy copy is in the header: processing is local / self-hosted, no cloud
 account.
 
 ## Desktop app (Tauri 2)
 
-Native macOS + Linux window around the same web UI. The shell starts
+Native macOS, Linux, and Windows window around the same web UI. The shell starts
 `clonebins-api` on `127.0.0.1:8765` if it is not already running (Python sidecar;
 same `clonebins_core` pipeline). **Browse** picks a source folder; **Save zip…**
 writes the export with a native save dialog.
@@ -211,7 +258,8 @@ npm run dev
 ```
 
 Linux extra packages: `libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev patchelf`.
-macOS: Xcode command-line tools.
+macOS: Xcode command-line tools. Windows: WebView2 (the NSIS installer downloads
+it if missing; Windows 11 already has it).
 
 Release binary (no installer, good for VMs):
 
@@ -221,11 +269,23 @@ npm run build:unsigned
 # apps/desktop/src-tauri/target/release/clonebins-desktop
 ```
 
-macOS `.app` in a DMG is published by GitHub Actions on a Mac runner:
-[Releases](https://github.com/RecognizeYourPrivilege/CloneBins/releases)
-(`CloneBins-0.1.0-macos-arm64.dmg` for Apple Silicon,
-`CloneBins-0.1.0-macos-x64.dmg` for Intel). Not notarized — see
-[apps/desktop/README.md](apps/desktop/README.md).
+GitHub Actions publishes Linux, macOS, and Windows installers on
+[Releases](https://github.com/RecognizeYourPrivilege/CloneBins/releases):
+
+| File | Platform |
+| --- | --- |
+| `CloneBins-0.1.0-macos-arm64.dmg` | Apple Silicon |
+| `CloneBins-0.1.0-macos-x64.dmg` | Intel Mac |
+| `CloneBins-0.1.0-ubuntu-amd64.deb` | Ubuntu / Debian |
+| `CloneBins-0.1.0-linux-x64.AppImage` | Generic glibc Linux |
+| `CloneBins-0.1.0-archlinux-x86_64.pkg.tar.zst` | Arch |
+| `CloneBins-0.1.0-windows-x64-setup.exe` | Windows 10/11 NSIS (current user) |
+| `CloneBins-0.1.0-windows-x64.zip` | Windows portable (`CloneBins.exe` + `clonebins-api.exe`) |
+
+macOS DMGs are not notarized — see
+[apps/desktop/README.md](apps/desktop/README.md). The Windows installer is
+unsigned; SmartScreen may warn (More info → Run anyway). Keep
+`clonebins-api.exe` next to `CloneBins.exe` if you use the zip.
 
 ## iOS app (SwiftUI)
 
@@ -317,7 +377,10 @@ packages/api/      FastAPI (clonebins-api)
 apps/web/          Vite + React UI
 apps/desktop/      Tauri 2 shell
 apps/ios/          SwiftUI + XcodeGen (LAN API client; Core ML stub)
+Dockerfile         web UI + API + six opencv_zoo ONNX files
+docker-compose.yml docker compose up --build → http://127.0.0.1:8765
 docs/architecture.md
+docs/demo/         README screenshot, GIF, and MP4
 tests/
 ```
 
