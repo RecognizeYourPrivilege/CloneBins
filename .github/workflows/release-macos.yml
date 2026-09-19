@@ -98,16 +98,22 @@ jobs:
 
       - name: Build CloneBins.app (${{ matrix.arch }})
         working-directory: apps/desktop
-        run: npx tauri build --target ${{ matrix.rust_target }} --bundles dmg
+        # Bundle the .app only. `--bundles dmg` deletes macos/CloneBins.app after
+        # wrapping, which leaves nothing to inject the sidecar into.
+        run: npx tauri build --target ${{ matrix.rust_target }} --bundles app
 
       - name: Inject sidecar and wrap DMG
         run: |
           chmod +x apps/desktop/scripts/package-macos-dmg.sh
           APP="apps/desktop/src-tauri/target/${{ matrix.rust_target }}/release/bundle/macos/CloneBins.app"
           if [[ ! -d "$APP" ]]; then
-            APP="$(echo apps/desktop/src-tauri/target/${{ matrix.rust_target }}/release/bundle/macos/*.app)"
+            APP="$(find apps/desktop/src-tauri/target -type d -name 'CloneBins.app' | head -n 1)"
           fi
-          test -d "$APP"
+          if [[ ! -d "$APP" ]]; then
+            echo "CloneBins.app not found. Bundle tree:" >&2
+            find apps/desktop/src-tauri/target -maxdepth 6 -type d -print >&2 || true
+            exit 1
+          fi
           mkdir -p dist/release
           apps/desktop/scripts/package-macos-dmg.sh \
             dist/clonebins-api \
