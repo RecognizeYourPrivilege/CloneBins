@@ -71,7 +71,34 @@ The binary lands at:
 
 `apps/desktop/src-tauri/target/release/clonebins-desktop`
 
-Full installers (when desktop portal / FUSE work):
+GitHub Actions publishes installers on
+[Releases](https://github.com/RecognizeYourPrivilege/CloneBins/releases):
+
+| File | Distro |
+| --- | --- |
+| `CloneBins-0.1.0-ubuntu-amd64.deb` | Ubuntu / Debian (`sudo apt install ./…deb`) |
+| `CloneBins-0.1.0-linux-x64.AppImage` | Generic glibc (`chmod +x` then run) |
+| `CloneBins-0.1.0-archlinux-x86_64.pkg.tar.zst` | Arch (`sudo pacman -U`) |
+| `CloneBins-0.1.0-alpine-x86_64.apk` | Alpine (`apk add --allow-untrusted`) |
+
+Ubuntu and Arch packages are the Tauri window plus a frozen `clonebins-api`
+sidecar in `/usr/bin`. Alpine is musl: the workflow tries a WebKit GUI and
+falls back to frozen `clonebins` + `clonebins-api` if that does not link.
+
+To wrap binaries yourself (after a `tauri build --no-bundle` and a PyInstaller
+sidecar in `dist/clonebins-api`):
+
+```bash
+apps/desktop/scripts/package-linux.sh deb \
+  --desktop apps/desktop/src-tauri/target/release/clonebins-desktop \
+  --api dist/clonebins-api \
+  --out dist/release/CloneBins-0.1.0-ubuntu-amd64.deb
+```
+
+`arch` and `alpine` modes write `.pkg.tar.zst` / `.apk`. See
+`.github/workflows/release-linux.yml`.
+
+Full installers locally (when desktop portal / FUSE work):
 
 ```bash
 npm run build

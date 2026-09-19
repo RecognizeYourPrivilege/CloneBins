@@ -105,7 +105,8 @@ fn spawn_sidecar() -> Result<Child, String> {
     })
 }
 
-/// Sidecar next to the executable (`CloneBins.app/Contents/MacOS/clonebins-api`).
+/// Sidecar next to the executable (`CloneBins.app/Contents/MacOS/clonebins-api`
+/// or `/usr/bin/clonebins-api` on Linux).
 fn bundled_api_bin() -> Option<PathBuf> {
     let exe = std::env::current_exe().ok()?;
     let dir = exe.parent()?;

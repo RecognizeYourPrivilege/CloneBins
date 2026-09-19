@@ -23,6 +23,8 @@ merge / split / exclude, zip download. Both call `run_pipeline()`.
 
 The desktop app is a Tauri 2 window around `apps/web`. It spawns `clonebins-api`
 as a loopback sidecar so clustering still happens in Python, not in Rust.
+GitHub Actions publishes Ubuntu `.deb` / AppImage, Arch `.pkg.tar.zst`, Alpine
+`.apk`, and macOS DMGs with that sidecar next to the binary.
 
 The iOS app is a native SwiftUI client of that same FastAPI process. Photos you
 pick are uploaded to an API **you run** (Simulator → `127.0.0.1`; device → LAN
