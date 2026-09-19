@@ -8,6 +8,7 @@ on:
       - "v*"
     branches:
       - main
+      - cursor/linux-release-36e4
   workflow_dispatch:
     inputs:
       tag:
@@ -272,20 +273,29 @@ jobs:
           path: dist/release/*
           if-no-files-found: error
 
-  publish:
-    needs: [ubuntu, arch, alpine]
-    if: ${{ !cancelled() && (needs.ubuntu.result == 'success' || needs.arch.result == 'success' || needs.alpine.result == 'success') }}
+  publish-glibc:
+    needs: [ubuntu, arch]
+    if: ${{ !cancelled() && (needs.ubuntu.result == 'success' || needs.arch.result == 'success') }}
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+
       - uses: actions/download-artifact@v4
+        if: needs.ubuntu.result == 'success'
         with:
-          merge-multiple: true
+          name: linux-ubuntu
+          path: dist/release
+
+      - uses: actions/download-artifact@v4
+        if: needs.arch.result == 'success'
+        with:
+          name: linux-arch
           path: dist/release
 
       - name: List artifacts
         run: ls -lh dist/release
 
-      - name: Publish GitHub Release
+      - name: Publish Ubuntu / Arch GitHub Release assets
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.RELEASE_TAG }}
@@ -294,41 +304,34 @@ jobs:
           prerelease: false
           fail_on_unmatched_files: false
           files: dist/release/*
-          body: |
-            Desktop installers for macOS and Linux. Clustering stays on your machine;
-            there is no cloud account. Each GUI package includes a bundled
-            `clonebins-api` sidecar (same `clonebins_core` pipeline as the CLI).
+          body_path: .github/release-notes-v0.1.0.md
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-            ### macOS
-            | File | Mac |
-            | --- | --- |
-            | `CloneBins-0.1.0-macos-arm64.dmg` | Apple Silicon (M1/M2/M3/M4) |
-            | `CloneBins-0.1.0-macos-x64.dmg` | Intel |
+  publish-alpine:
+    needs: [alpine]
+    if: ${{ !cancelled() && needs.alpine.result == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
 
-            **Not notarized.** First launch: right-click the app → Open, or allow it under
-            System Settings → Privacy & Security. Ad-hoc signed on GitHub Actions.
+      - uses: actions/download-artifact@v4
+        with:
+          name: linux-alpine
+          path: dist/release
 
-            ### Linux
-            | File | Distro |
-            | --- | --- |
-            | `CloneBins-0.1.0-ubuntu-amd64.deb` | Ubuntu / Debian (glibc, WebKitGTK 4.1) |
-            | `CloneBins-0.1.0-linux-x64.AppImage` | Generic glibc Linux (chmod +x, then run) |
-            | `CloneBins-0.1.0-archlinux-x86_64.pkg.tar.zst` | Arch Linux |
-            | `CloneBins-0.1.0-alpine-x86_64.apk` | Alpine (musl). GUI if WebKit built; otherwise CLI + `clonebins-api` |
+      - name: List artifacts
+        run: ls -lh dist/release
 
-            Ubuntu:
-            ```
-            sudo apt install ./CloneBins-0.1.0-ubuntu-amd64.deb
-            ```
-
-            Arch:
-            ```
-            sudo pacman -U CloneBins-0.1.0-archlinux-x86_64.pkg.tar.zst
-            ```
-
-            Alpine (unsigned CI package):
-            ```
-            sudo apk add --allow-untrusted CloneBins-0.1.0-alpine-x86_64.apk
-            ```
+      - name: Publish Alpine GitHub Release asset
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          name: CloneBins ${{ env.RELEASE_TAG }}
+          draft: false
+          prerelease: false
+          fail_on_unmatched_files: false
+          files: dist/release/*
+          body_path: .github/release-notes-v0.1.0.md
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

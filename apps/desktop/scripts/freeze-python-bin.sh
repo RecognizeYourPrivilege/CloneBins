@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Freeze clonebins-api and/or clonebins with PyInstaller (Linux/macOS).
+# Freeze clonebins-api and/or clonebins with PyInstaller (Linux/macOS/Windows).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
@@ -57,12 +57,17 @@ mkdir -p "$ROOT/dist"
   "${extra[@]}" \
   "$ENTRY"
 
-if [[ ! -f "$ROOT/dist/$NAME" ]]; then
-  echo "PyInstaller did not write dist/$NAME" >&2
+# PyInstaller writes dist/$NAME on Unix and dist/$NAME.exe on Windows.
+if [[ -f "$ROOT/dist/${NAME}.exe" ]]; then
+  OUT="$ROOT/dist/${NAME}.exe"
+elif [[ -f "$ROOT/dist/$NAME" ]]; then
+  OUT="$ROOT/dist/$NAME"
+else
+  echo "PyInstaller did not write dist/$NAME or dist/${NAME}.exe" >&2
   ls -la "$ROOT/dist" >&2 || true
   exit 1
 fi
-chmod +x "$ROOT/dist/$NAME"
-file "$ROOT/dist/$NAME" || true
-ls -lh "$ROOT/dist/$NAME"
-echo "Wrote dist/$NAME"
+chmod +x "$OUT" 2>/dev/null || true
+file "$OUT" || true
+ls -lh "$OUT"
+echo "Wrote $OUT"
