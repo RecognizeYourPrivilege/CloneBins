@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+import os
+from pathlib import Path
+
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import FileResponse, JSONResponse, Response
+from fastapi.staticfiles import StaticFiles
 
 from clonebins_api import __version__
 from clonebins_api.jobs import JobError, store
@@ -17,7 +21,7 @@ from clonebins_api.schemas import (
     PathRequest,
     RenameRequest,
 )
-from clonebins_core.models import default_models_dir, models_present
+from clonebins_core.models import catalog_status, default_models_dir, models_present
 
 app = FastAPI(
     title="CloneBins API",
@@ -34,6 +38,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+_IMAGE_TYPES = {
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".png": "image/png",
+    ".webp": "image/webp",
+}
+
 
 @app.exception_handler(JobError)
 def _job_error(_request, exc: JobError) -> JSONResponse:
@@ -43,13 +54,20 @@ def _job_error(_request, exc: JobError) -> JSONResponse:
 @app.get("/api/health")
 def health() -> dict:
     directory = default_models_dir()
+    catalog = catalog_status(directory)
     return {
         "ok": True,
         "version": __version__,
         "privacy": "local",
         "models_dir": str(directory),
         "models_ready": models_present(directory),
+        "models": catalog,
     }
+
+
+@app.get("/api/models")
+def models() -> dict:
+    return catalog_status()
 
 
 @app.post("/api/jobs/upload")
@@ -94,6 +112,11 @@ def include_cluster(job_id: str, cluster_id: str, body: IncludeRequest) -> dict:
     return store.set_included(job_id, cluster_id, body.included).to_dict()
 
 
+@app.post("/api/jobs/{job_id}/include-all")
+def include_all(job_id: str, body: IncludeRequest) -> dict:
+    return store.set_included_all(job_id, body.included).to_dict()
+
+
 @app.post("/api/jobs/{job_id}/merge")
 def merge(job_id: str, body: MergeRequest) -> dict:
     return store.merge(job_id, body.cluster_ids).to_dict()
@@ -118,6 +141,18 @@ def thumbnail(job_id: str, image_id: str) -> Response:
     return Response(content=data, media_type="image/jpeg")
 
 
+@app.get("/api/jobs/{job_id}/images/{image_id}")
+def original_image(job_id: str, image_id: str) -> FileResponse:
+    img = store.image(job_id, image_id)
+    suffix = img.path.suffix.lower()
+    media = _IMAGE_TYPES.get(suffix, "application/octet-stream")
+    return FileResponse(
+        path=img.path,
+        media_type=media,
+        headers={"Content-Disposition": f'inline; filename="{img.filename}"'},
+    )
+
+
 @app.get("/api/jobs/{job_id}/export.zip")
 def export_zip(job_id: str) -> Response:
     data = store.build_zip(job_id)
@@ -128,9 +163,19 @@ def export_zip(job_id: str) -> Response:
     )
 
 
-def run(host: str | None = None, port: int | None = None) -> None:
-    import os
+def _mount_web_ui() -> None:
+    dist = os.environ.get("CLONEBINS_WEB_DIST")
+    if not dist:
+        return
+    directory = Path(dist)
+    if directory.is_dir():
+        app.mount("/", StaticFiles(directory=str(directory), html=True), name="web")
 
+
+_mount_web_ui()
+
+
+def run(host: str | None = None, port: int | None = None) -> None:
     import uvicorn
 
     bind_host = host or os.environ.get("CLONEBINS_API_HOST", "127.0.0.1")

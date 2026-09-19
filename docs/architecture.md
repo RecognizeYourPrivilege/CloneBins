@@ -85,6 +85,9 @@ IP with `CLONEBINS_API_HOST=0.0.0.0`). It does not embed faces on-device in v1.
   face half + appearance, so every row is the same length (mixed folders used
   to crash with ``all input arrays must have the same shape``). Stylized gens
   still bin by look.
+- Web zip export: bins start unchecked; include individually or via Include all.
+- Detector/recognizer: YuNet 2023 FP32 / INT8 / INT8-BQ and SFace 2021 FP32 /
+  INT8 / INT8-BQ from opencv_zoo (Hugging Face mirrors). Docker bakes all six.
 - `min-images`: clusters smaller than the cutoff are reported and not exported
   by default (web: shown as “below min”, off in the zip until you include or merge).
 - Folder names are filesystem-safe: `subject_01`, `subject_02`, … (prefix

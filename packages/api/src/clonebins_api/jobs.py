@@ -47,7 +47,7 @@ class JobCluster:
     id: str
     name: str
     image_ids: list[str] = field(default_factory=list)
-    included: bool = True
+    included: bool = False
     below_min: bool = False
 
 
@@ -247,12 +247,20 @@ class JobStore:
             _cluster(job, cluster_id).included = included
         return job
 
+    def set_included_all(self, job_id: str, included: bool) -> Job:
+        job = self.get(job_id)
+        with job.lock:
+            for cluster in job.clusters:
+                cluster.included = included
+        return job
+
     def merge(self, job_id: str, cluster_ids: list[str]) -> Job:
         if len(cluster_ids) < 2:
             raise JobError("Select at least two clusters to merge")
         job = self.get(job_id)
         with job.lock:
             primary = _cluster(job, cluster_ids[0])
+            was_included = any(_cluster(job, cid).included for cid in cluster_ids)
             seen = set(primary.image_ids)
             keep = {cluster_ids[0]}
             for cid in cluster_ids[1:]:
@@ -264,7 +272,7 @@ class JobStore:
                 keep.add(cid)
             job.clusters = [c for c in job.clusters if c.id == primary.id or c.id not in keep]
             primary.below_min = False
-            primary.included = True
+            primary.included = was_included
         return job
 
     def extract(self, job_id: str, cluster_id: str, image_ids: list[str]) -> Job:
@@ -284,7 +292,7 @@ class JobStore:
                 id=_new_id("c"),
                 name=_unique_cluster_name("split", existing),
                 image_ids=move,
-                included=True,
+                included=source.included,
             )
             job.clusters.append(new)
         return job
@@ -373,6 +381,8 @@ class JobStore:
                     naming=Naming.KEEP if settings.keep_names else Naming.INDEX,
                     subject_prefix=settings.subject_prefix,
                     download_models=settings.download_models,
+                    yunet_id=settings.yunet,
+                    sface_id=settings.sface,
                 ),
                 progress=job.progress,
             )
@@ -398,7 +408,7 @@ class JobStore:
                         id=_new_id("c"),
                         name=bin_.name,
                         image_ids=[add_record(m) for m in bin_.members],
-                        included=True,
+                        included=False,
                         below_min=False,
                     )
                 )

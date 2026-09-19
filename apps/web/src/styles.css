@@ -299,7 +299,7 @@ button.danger {
   margin: 0;
 }
 
-.thumbs button {
+.thumbs a.thumb-link {
   width: 100%;
   flex-direction: column;
   background: #120e0a;
@@ -307,6 +307,9 @@ button.danger {
   padding: 6px;
   font-weight: 400;
   font-size: 11px;
+  display: flex;
+  text-decoration: none;
+  border-radius: 8px;
 }
 
 .thumbs img {
@@ -317,6 +320,15 @@ button.danger {
   margin-bottom: 4px;
 }
 
-.thumbs li.picked button {
+.thumbs .open-full {
+  display: block;
+  text-align: center;
+  font-size: 11px;
+  color: var(--brass-2);
+  margin-top: 4px;
+  font-family: ui-sans-serif, "Segoe UI", sans-serif;
+}
+
+.thumbs li.picked .thumb-link {
   outline: 2px solid var(--brass);
 }

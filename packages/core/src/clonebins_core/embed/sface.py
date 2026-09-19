@@ -31,6 +31,7 @@ class SFaceEmbedder:
             nms_threshold=0.3,
         )
         self._recognizer = cv2.FaceRecognizerSF.create(str(models.sface), "")
+        self.name = f"yunet-{models.yunet_id}+sface-{models.sface_id}"
 
     def embed(self, image_bgr: np.ndarray) -> EmbedResult:
         faces = self._detect(image_bgr)

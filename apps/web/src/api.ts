@@ -88,6 +88,16 @@ export async function setIncluded(jobId: string, clusterId: string, included: bo
   );
 }
 
+export async function setIncludedAll(jobId: string, included: boolean): Promise<Job> {
+  return parse<Job>(
+    await fetch(apiUrl(`/api/jobs/${jobId}/include-all`), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ included }),
+    }),
+  );
+}
+
 export async function mergeClusters(jobId: string, clusterIds: string[]): Promise<Job> {
   return parse<Job>(
     await fetch(apiUrl(`/api/jobs/${jobId}/merge`), {
@@ -120,6 +130,10 @@ export async function excludeImages(jobId: string, imageIds: string[]): Promise<
 
 export function thumbUrl(jobId: string, imageId: string): string {
   return apiUrl(`/api/jobs/${jobId}/thumbs/${imageId}`);
+}
+
+export function imageUrl(jobId: string, imageId: string): string {
+  return apiUrl(`/api/jobs/${jobId}/images/${imageId}`);
 }
 
 export function exportUrl(jobId: string): string {

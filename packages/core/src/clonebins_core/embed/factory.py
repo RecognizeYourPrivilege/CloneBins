@@ -97,13 +97,21 @@ def build_embedder(
     download_models: bool = True,
     models_dir: Path | None = None,
     log=None,
+    yunet_id: str = "2023mar",
+    sface_id: str = "2021dec",
 ) -> tuple[HybridEmbedder, list[str]]:
     """Construct the default embedder. Face models are optional with a fallback."""
     notes: list[str] = []
     appearance = AppearanceEmbedder()
     face: Embedder | None = None
     try:
-        paths = ensure_face_models(models_dir=models_dir, download=download_models, log=log)
+        paths = ensure_face_models(
+            models_dir=models_dir,
+            download=download_models,
+            log=log,
+            yunet_id=yunet_id,
+            sface_id=sface_id,
+        )
         face = SFaceEmbedder(paths)
     except Exception as exc:
         # OpenCV may raise cv2.error if the ONNX graph is incompatible.

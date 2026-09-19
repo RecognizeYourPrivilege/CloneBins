@@ -1,0 +1,13 @@
+services:
+  clonebins:
+    build: .
+    ports:
+      - "8765:8765"
+    environment:
+      CLONEBINS_API_HOST: "0.0.0.0"
+      CLONEBINS_API_PORT: "8765"
+      CLONEBINS_MODELS_DIR: /models
+      CLONEBINS_WEB_DIST: /app/web/dist
+    # Optional: cluster a host folder via the UI "folder path" field
+    # volumes:
+    #   - ${HOME}/gens:/data:ro
