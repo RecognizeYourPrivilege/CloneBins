@@ -223,7 +223,8 @@ npm run build:unsigned
 
 macOS `.app` in a DMG is published by GitHub Actions on a Mac runner:
 [Releases](https://github.com/RecognizeYourPrivilege/CloneBins/releases)
-(`CloneBins-0.1.0-macos-arm64.dmg`). Not notarized — see
+(`CloneBins-0.1.0-macos-arm64.dmg` for Apple Silicon,
+`CloneBins-0.1.0-macos-x64.dmg` for Intel). Not notarized — see
 [apps/desktop/README.md](apps/desktop/README.md).
 
 ## iOS app (SwiftUI)
