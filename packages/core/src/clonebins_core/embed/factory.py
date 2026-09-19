@@ -82,7 +82,7 @@ def build_embedder(
     except Exception as exc:
         # OpenCV may raise cv2.error if the ONNX graph is incompatible.
         notes.append(
-            f"Face backend unavailable ({type(exc).__name__}: {exc}). "
+            f"Face backend unavailable ({type(exc).__name__}). "
             "Using appearance embedding only. Run `clonebins models download` "
             "for YuNet + SFace identity clustering."
         )
