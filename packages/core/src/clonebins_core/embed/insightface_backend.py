@@ -13,6 +13,7 @@ from clonebins_core.embed import EmbedResult, l2_normalize
 
 class InsightFaceEmbedder:
     name = "insightface"
+    embedding_dim = 512
 
     def __init__(self, model_name: str = "buffalo_s") -> None:
         try:

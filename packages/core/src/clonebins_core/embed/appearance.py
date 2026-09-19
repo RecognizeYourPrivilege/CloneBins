@@ -23,6 +23,10 @@ class AppearanceEmbedder:
         self.size = size
         self.grid = grid
 
+    @property
+    def embedding_dim(self) -> int:
+        return 36 + 16 + 8 + self.grid * self.grid * 3
+
     def embed_vector(self, image_bgr: np.ndarray) -> np.ndarray:
         img = cv2.resize(image_bgr, (self.size, self.size), interpolation=cv2.INTER_AREA)
         hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)

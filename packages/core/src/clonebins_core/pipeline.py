@@ -5,9 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-import numpy as np
-
 from clonebins_core.cluster import DEFAULT_THRESHOLD, cluster_embeddings
+from clonebins_core.embed import stack_embeddings
 from clonebins_core.embed.factory import HybridEmbedder, build_embedder
 from clonebins_core.export import export_plan, subject_name
 from clonebins_core.io import load_image_bgr
@@ -150,7 +149,7 @@ def _build_plan(
     if not usable:
         return plan
 
-    matrix = np.stack([r.embedding for r in usable], axis=0)
+    matrix = stack_embeddings([r.embedding for r in usable if r.embedding is not None])
     labels = cluster_embeddings(matrix, threshold=threshold)
 
     grouped: dict[int, list[ImageRecord]] = {}
