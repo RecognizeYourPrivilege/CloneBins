@@ -81,9 +81,9 @@ npm run build
 ### macOS
 
 GitHub Actions (macOS runner) publishes **CloneBins.app inside a DMG** on
-[Releases](https://github.com/RecognizeYourPrivilege/CloneBins/releases). That
-job is not this Linux VM — it is `macos-latest` (Apple Silicon). The app is
-ad-hoc signed, not notarized.
+[Releases](https://github.com/RecognizeYourPrivilege/CloneBins/releases) for
+**Apple Silicon** (`*-macos-arm64.dmg`) and **Intel** (`*-macos-x64.dmg`). That
+job is not this Linux VM. The app is ad-hoc signed, not notarized.
 
 To rebuild the same artifact on a Mac:
 
