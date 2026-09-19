@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Build Ubuntu .deb, Arch .pkg.tar.zst, or Alpine .apk for CloneBins.
+# Build Ubuntu .deb or Arch .pkg.tar.zst for CloneBins.
 # Usage:
-#   package-linux.sh deb|arch|alpine --desktop BIN --api BIN [--cli BIN] --out FILE
+#   package-linux.sh deb|arch --desktop BIN --api BIN --out FILE
 #   package-linux.sh inject-deb --deb FILE --api BIN --out FILE
 #   package-linux.sh inject-appimage --appimage FILE --api BIN --out FILE
 set -euo pipefail
@@ -223,46 +223,6 @@ EOF
   finish_out
 }
 
-package_alpine() {
-  [[ -n "$OUT" ]] || { echo "--out required" >&2; exit 1; }
-  if [[ -z "$API_BIN" && -z "$CLI_BIN" && -z "$DESKTOP_BIN" ]]; then
-    echo "alpine package needs --api, --cli, and/or --desktop" >&2
-    exit 1
-  fi
-  local stage
-  stage="$(mktemp -d)"
-  trap 'rm -rf "$stage"' RETURN
-  stage_payload "$stage"
-  local size builddate
-  size="$(dir_size_bytes "$stage")"
-  builddate="$(date +%s)"
-  local depends=()
-  if [[ -n "$DESKTOP_BIN" ]]; then
-    depends+=(webkit2gtk-4.1 gtk+3.0 glib)
-  fi
-  {
-    echo "pkgname = clonebins"
-    echo "pkgver = ${VERSION}-r0"
-    echo "pkgdesc = ${PKGDESC}"
-    echo "url = ${URL}"
-    echo "builddate = ${builddate}"
-    echo "packager = CloneBins CI"
-    echo "size = ${size}"
-    echo "arch = x86_64"
-    echo "origin = clonebins"
-    echo "license = MIT"
-    echo "maintainer = CloneBins contributors"
-    for dep in "${depends[@]+"${depends[@]}"}"; do
-      echo "depend = $dep"
-    done
-  } >"$stage/.PKGINFO"
-  (
-    cd "$stage"
-    tar --format=ustar --numeric-owner --owner=0 --group=0 -cf - .PKGINFO usr | gzip -9 >"$OUT"
-  )
-  finish_out
-}
-
 inject_deb() {
   [[ -n "$OUT" ]] || { echo "--out required" >&2; exit 1; }
   [[ -n "$DEB_IN" ]] || { echo "--deb required" >&2; exit 1; }
@@ -327,7 +287,6 @@ inject_appimage() {
 case "$MODE" in
   deb) package_deb ;;
   arch) package_arch ;;
-  alpine) package_alpine ;;
   inject-deb) inject_deb ;;
   inject-appimage) inject_appimage ;;
   *) echo "unknown mode: $MODE" >&2; exit 1 ;;

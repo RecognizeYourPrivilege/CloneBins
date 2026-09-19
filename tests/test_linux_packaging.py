@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import os
 import subprocess
-import tarfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -23,17 +22,14 @@ def _run(args: list[str], env: dict[str, str] | None = None) -> None:
     subprocess.run(args, check=True, cwd=ROOT, env=merged)
 
 
-def test_package_linux_deb_arch_alpine(tmp_path: Path) -> None:
+def test_package_linux_deb_and_arch(tmp_path: Path) -> None:
     desktop = tmp_path / "clonebins-desktop"
     api = tmp_path / "clonebins-api"
-    cli = tmp_path / "clonebins"
     _dummy_bin(desktop)
     _dummy_bin(api)
-    _dummy_bin(cli)
 
     deb = tmp_path / "CloneBins-0.1.0-ubuntu-amd64.deb"
     arch = tmp_path / "CloneBins-0.1.0-archlinux-x86_64.pkg.tar.zst"
-    apk = tmp_path / "CloneBins-0.1.0-alpine-x86_64.apk"
 
     _run(
         [
@@ -74,28 +70,3 @@ def test_package_linux_deb_arch_alpine(tmp_path: Path) -> None:
     assert "usr/bin/clonebins-desktop" in arch_list
     assert "usr/bin/clonebins-api" in arch_list
     assert ".PKGINFO" in arch_list
-
-    _run(
-        [
-            "bash",
-            str(SCRIPT),
-            "alpine",
-            "--api",
-            str(api),
-            "--cli",
-            str(cli),
-            "--out",
-            str(apk),
-        ]
-    )
-    assert apk.is_file() and apk.stat().st_size > 0
-    with tarfile.open(apk, "r:gz") as tf:
-        names = tf.getnames()
-        pkginfo = tf.extractfile(".PKGINFO")
-        assert pkginfo is not None
-        info = pkginfo.read().decode("utf-8")
-    assert "usr/bin/clonebins-api" in names
-    assert "usr/bin/clonebins" in names
-    assert "usr/bin/clonebins-desktop" not in names
-    assert "pkgname = clonebins" in info
-    assert "depend = webkit2gtk" not in info

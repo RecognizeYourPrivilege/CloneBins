@@ -1,5 +1,5 @@
-# Builds Linux installers (Ubuntu .deb + AppImage, Arch pkg.tar.zst, Alpine apk)
-# and attaches them to a GitHub Release without replacing macOS DMGs.
+# Builds Linux installers (Ubuntu .deb + AppImage, Arch pkg.tar.zst)
+# and attaches them to a GitHub Release without replacing macOS/Windows assets.
 name: Release Linux
 
 on:
@@ -194,86 +194,7 @@ jobs:
           path: dist/release/*
           if-no-files-found: error
 
-  alpine:
-    name: alpine-apk
-    runs-on: ubuntu-latest
-    timeout-minutes: 90
-    container:
-      image: alpine:latest
-    steps:
-      - name: Install build deps
-        shell: sh
-        run: |
-          apk add --no-cache \
-            bash git curl wget tar gzip ca-certificates \
-            build-base pkgconf clang \
-            gtk+3.0-dev librsvg-dev openssl-dev patchelf \
-            nodejs npm \
-            python3 py3-pip py3-virtualenv python3-dev \
-            linux-headers libffi-dev \
-            file
-          apk add --no-cache webkit2gtk-4.1-dev || apk add --no-cache webkit2gtk-dev || true
-          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | \
-            sh -s -- -y --default-toolchain stable --default-host x86_64-unknown-linux-musl
-          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
-
-      - uses: actions/checkout@v4
-
-      - name: Python venv + freeze CLI and API
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 -m venv /tmp/cbvenv || virtualenv /tmp/cbvenv
-          /tmp/cbvenv/bin/pip install --upgrade pip wheel
-          /tmp/cbvenv/bin/pip install --prefer-binary -e packages/core -e packages/cli -e packages/api pyinstaller
-          chmod +x apps/desktop/scripts/freeze-python-bin.sh
-          apps/desktop/scripts/freeze-python-bin.sh api /tmp/cbvenv/bin/python
-          apps/desktop/scripts/freeze-python-bin.sh cli /tmp/cbvenv/bin/python
-
-      - name: Install JS deps
-        shell: bash
-        run: |
-          npm ci --prefix apps/web
-          npm ci --prefix apps/desktop
-
-      - name: Try Tauri GUI on musl
-        id: tauri
-        shell: bash
-        continue-on-error: true
-        working-directory: apps/desktop
-        env:
-          RUSTFLAGS: "-C target-feature=-crt-static"
-          OPENSSL_NO_VENDOR: "1"
-        run: |
-          source "$HOME/.cargo/env"
-          rustc --version
-          npx tauri build --no-bundle
-
-      - name: Wrap Alpine apk
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p dist/release
-          chmod +x apps/desktop/scripts/package-linux.sh
-          ARGS=(alpine --api dist/clonebins-api --cli dist/clonebins --out dist/release/CloneBins-0.1.0-alpine-x86_64.apk)
-          DESKTOP_BIN="apps/desktop/src-tauri/target/release/clonebins-desktop"
-          if [[ -x "$DESKTOP_BIN" ]]; then
-            echo "Including musl Tauri GUI in Alpine apk"
-            ARGS+=(--desktop "$DESKTOP_BIN")
-          else
-            echo "Tauri GUI not built on musl; Alpine apk is CLI + clonebins-api"
-          fi
-          apps/desktop/scripts/package-linux.sh "${ARGS[@]}"
-          tar -tzf dist/release/CloneBins-0.1.0-alpine-x86_64.apk | grep usr/bin
-          ls -lh dist/release
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: linux-alpine
-          path: dist/release/*
-          if-no-files-found: error
-
-  publish-glibc:
+  publish:
     needs: [ubuntu, arch]
     if: ${{ !cancelled() && (needs.ubuntu.result == 'success' || needs.arch.result == 'success') }}
     runs-on: ubuntu-latest
@@ -296,34 +217,6 @@ jobs:
         run: ls -lh dist/release
 
       - name: Publish Ubuntu / Arch GitHub Release assets
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ env.RELEASE_TAG }}
-          name: CloneBins ${{ env.RELEASE_TAG }}
-          draft: false
-          prerelease: false
-          fail_on_unmatched_files: false
-          files: dist/release/*
-          body_path: .github/release-notes-v0.1.0.md
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  publish-alpine:
-    needs: [alpine]
-    if: ${{ !cancelled() && needs.alpine.result == 'success' }}
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/download-artifact@v4
-        with:
-          name: linux-alpine
-          path: dist/release
-
-      - name: List artifacts
-        run: ls -lh dist/release
-
-      - name: Publish Alpine GitHub Release asset
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.RELEASE_TAG }}

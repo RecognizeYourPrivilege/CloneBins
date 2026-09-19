@@ -21,7 +21,6 @@ System Settings → Privacy & Security. Ad-hoc signed on GitHub Actions.
 | `CloneBins-0.1.0-ubuntu-amd64.deb` | Ubuntu / Debian (glibc, WebKitGTK 4.1) |
 | `CloneBins-0.1.0-linux-x64.AppImage` | Generic glibc Linux (`chmod +x`, then run) |
 | `CloneBins-0.1.0-archlinux-x86_64.pkg.tar.zst` | Arch Linux |
-| `CloneBins-0.1.0-alpine-x86_64.apk` | Alpine (musl). GUI if WebKit built; otherwise CLI + `clonebins-api` |
 
 Ubuntu:
 
@@ -33,12 +32,6 @@ Arch:
 
 ```
 sudo pacman -U CloneBins-0.1.0-archlinux-x86_64.pkg.tar.zst
-```
-
-Alpine (unsigned CI package):
-
-```
-sudo apk add --allow-untrusted CloneBins-0.1.0-alpine-x86_64.apk
 ```
 
 ### Windows
