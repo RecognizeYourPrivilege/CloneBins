@@ -9,20 +9,23 @@ authors = [{ name = "CloneBins contributors" }]
 dependencies = [
   "clonebins-core",
   "clonebins",
+  "clonebins-api",
 ]
 
 [dependency-groups]
 dev = [
   "pytest>=8.0",
+  "httpx>=0.27",
   "ruff>=0.6",
 ]
 
 [tool.uv.workspace]
-members = ["packages/core", "packages/cli"]
+members = ["packages/core", "packages/cli", "packages/api"]
 
 [tool.uv.sources]
 clonebins-core = { workspace = true }
 clonebins = { workspace = true }
+clonebins-api = { workspace = true }
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -32,7 +35,7 @@ addopts = "-q"
 [tool.ruff]
 line-length = 100
 target-version = "py310"
-src = ["packages/core/src", "packages/cli/src", "tests"]
+src = ["packages/core/src", "packages/cli/src", "packages/api/src", "tests"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "W"]

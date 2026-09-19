@@ -6,6 +6,8 @@ from typer.testing import CliRunner
 
 from clonebins_cli.main import app
 from portraits import write_identity_set
+from conftest import visible_help
+from conftest import visible_help
 
 runner = CliRunner()
 
@@ -13,19 +15,20 @@ runner = CliRunner()
 def test_help():
     result = runner.invoke(app, ["--help"])
     assert result.exit_code == 0
-    assert "cluster" in result.stdout
+    assert "cluster" in visible_help(result.stdout)
 
 
 def test_cluster_help():
     result = runner.invoke(app, ["cluster", "--help"])
     assert result.exit_code == 0
-    assert "--threshold" in result.stdout
-    assert "--min-images" in result.stdout
-    assert "--mode" in result.stdout
-    assert "--dry-run" in result.stdout
-    assert "--hardlink" in result.stdout
-    assert "--rename-index" in result.stdout
-    assert "--subject-prefix" in result.stdout
+    text = visible_help(result.stdout)
+    assert "--threshold" in text
+    assert "--min-images" in text
+    assert "--mode" in text
+    assert "--dry-run" in text
+    assert "--hardlink" in text
+    assert "--rename-index" in text
+    assert "--subject-prefix" in text
 
 
 def test_cluster_end_to_end(tmp_path: Path):

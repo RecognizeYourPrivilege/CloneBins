@@ -1,11 +1,26 @@
-"""Web client (placeholder).
+# CloneBins web
 
-Planned stack:
-- Vite + React UI
-- Local FastAPI process importing `clonebins_core` (same pipeline as the CLI)
-- Zip export of `subject_XX/` bins
-- Offline-first: the browser talks only to localhost
+Local-first UI: upload images (or point at a folder on this machine), cluster
+identities with `clonebins_core`, rename/merge/split bins, download a zip.
 
-This folder is intentionally empty of app code in v0.1. See
-`docs/architecture.md` for how the web client will wrap the shared core.
-"""
+The browser talks only to the FastAPI process on localhost. There is no cloud
+account.
+
+## Run
+
+From the repo root:
+
+```bash
+python3 -m pip install -e packages/core -e packages/api
+clonebins-api
+```
+
+In another terminal:
+
+```bash
+cd apps/web
+npm install
+npm run dev
+```
+
+Open http://127.0.0.1:5173 — Vite proxies `/api` to http://127.0.0.1:8765.
