@@ -1,0 +1,55 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+.eggs/
+dist/
+build/
+pip-wheel-metadata/
+
+# Virtualenvs / package managers
+.venv/
+venv/
+env/
+.uv/
+uv.lock.bak
+
+# Test / lint caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+
+# Models and local caches (downloaded on first run)
+.cache/
+models/*.onnx
+*.onnx
+
+# Local run output
+output/
+/bins/
+demo_output/
+
+# Editors / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*~
+
+node_modules/
+apps/web/dist/
+apps/desktop/src-tauri/target/
+
+# Xcode (generated on a Mac via `xcodegen generate`)
+xcuserdata/
+*.xcuserstate
+DerivedData/
+apps/ios/CloneBins.xcodeproj/
+apps/ios/CloneBins.xcworkspace/

@@ -1,0 +1,27 @@
+[project]
+name = "clonebins-api"
+version = "0.1.0"
+description = "Local FastAPI server wrapping clonebins_core for the web UI."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "CloneBins contributors" }]
+dependencies = [
+  "clonebins-core",
+  "fastapi>=0.110",
+  "uvicorn[standard]>=0.27",
+  "python-multipart>=0.0.9",
+]
+
+[project.scripts]
+clonebins-api = "clonebins_api.__main__:main"
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "httpx>=0.27"]
+
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
