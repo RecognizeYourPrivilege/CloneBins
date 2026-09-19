@@ -17,9 +17,9 @@ only need appearance clustering).
 Local web UI: cluster two identities, rename `subject_01` → `hero_main`, skip a
 corrupt file, download `clonebins.zip`.
 
-![CloneBins web UI with clustered bins and Download zip](docs/demo/web_ui_clusters_zip.png)
+<img alt="CloneBins web UI with clustered bins and Download zip" src="./docs/demo/web_ui_clusters_zip.png" width="900" />
 
-[Screen recording (cluster → rename → zip)](docs/demo/web_cluster_rename_zip.mp4)
+<img alt="Screen recording: cluster, rename hero_main, download zip" src="./docs/demo/web_cluster_rename_zip.gif" width="900" />
 
 ## Architecture (short)
 
