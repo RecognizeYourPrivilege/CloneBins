@@ -66,10 +66,20 @@ jobs:
         run: |
           set -euo pipefail
           PYTHON="${pythonLocation}/bin/python3"
-          "$PYTHON" -m pip install --upgrade pip
-          "$PYTHON" -m pip install -e packages/core -e packages/api pyinstaller
-          "$PYTHON" -c "import platform, sys; print(sys.executable, platform.machine(), platform.architecture())"
-          MACHINE="$("$PYTHON" -c 'import platform; print(platform.machine())')"
+          run_py() {
+            if [[ "${{ matrix.arch }}" == "x64" ]]; then
+              arch -x86_64 "$PYTHON" "$@"
+            else
+              "$PYTHON" "$@"
+            fi
+          }
+          if [[ "${{ matrix.arch }}" == "x64" ]] && ! arch -x86_64 /usr/bin/true; then
+            sudo softwareupdate --install-rosetta --agree-to-license
+          fi
+          run_py -m pip install --upgrade pip
+          run_py -m pip install -e packages/core -e packages/api pyinstaller
+          run_py -c "import platform, sys; print(sys.executable, platform.machine(), platform.architecture())"
+          MACHINE="$(run_py -c 'import platform; print(platform.machine())')"
           case "${{ matrix.arch }}" in
             arm64) EXPECT=arm64 ;;
             x64) EXPECT=x86_64 ;;
@@ -84,7 +94,14 @@ jobs:
         run: |
           set -euo pipefail
           PYTHON="${pythonLocation}/bin/python3"
-          "$PYTHON" -m PyInstaller \
+          run_py() {
+            if [[ "${{ matrix.arch }}" == "x64" ]]; then
+              arch -x86_64 "$PYTHON" "$@"
+            else
+              "$PYTHON" "$@"
+            fi
+          }
+          run_py -m PyInstaller \
             --noconfirm --clean --onefile \
             --name clonebins-api \
             --hidden-import uvicorn.logging \
