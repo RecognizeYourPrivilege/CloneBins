@@ -17,9 +17,47 @@ only need appearance clustering).
 Local web UI: cluster two identities, rename `subject_01` → `hero_main`, skip a
 corrupt file, download `clonebins.zip`.
 
-<img alt="CloneBins web UI with clustered bins and Download zip" src="./docs/demo/web_ui_clusters_zip.png" width="900" />
+![CloneBins web UI with clustered bins and Download zip](docs/demo/web_ui_clusters_zip.png)
 
-<img alt="Screen recording: cluster, rename hero_main, download zip" src="./docs/demo/web_cluster_rename_zip.gif" width="900" />
+[![Demo: cluster, rename hero_main, download zip](docs/demo/web_cluster_rename_zip.gif)](docs/demo/web_cluster_rename_zip.mp4)
+
+The GIF plays inline on GitHub. Click it for the [full-length MP4](docs/demo/web_cluster_rename_zip.mp4).
+
+## Docker (web UI)
+
+One command runs the API, the Vite-built UI, and **all six** opencv_zoo ONNX
+weights (3 YuNet + 3 SFace) baked into the image. No separate `clonebins-api`
+process, no Node toolchain.
+
+```bash
+docker compose up --build
+```
+
+Open **http://127.0.0.1:8765**.
+
+| Piece | In the image |
+| --- | --- |
+| UI | `apps/web` production build, served by FastAPI |
+| API | `clonebins-api` on `0.0.0.0:8765` |
+| YuNet | `2023mar` FP32 (default), `2023mar_int8`, `2023mar_int8bq` |
+| SFace | `2021dec` FP32 (default), `2021dec_int8`, `2021dec_int8bq` |
+
+Files: [`Dockerfile`](Dockerfile), [`docker-compose.yml`](docker-compose.yml).
+Weights come from Hugging Face (`opencv/face_detection_yunet`,
+`opencv/face_recognition_sface`) at build time, with GitHub LFS mirrors as
+fallback. After the image exists, clustering does not need the network.
+
+In the UI: pick detector/recognizer in Settings. Bins start **unchecked** for
+the zip — use **Include all in zip** or tick **in zip**. **open ↗** (or
+Ctrl/Cmd-click) loads the original in a new tab.
+
+To cluster a folder on the host, uncomment the volume in
+`docker-compose.yml` and type that path in the UI:
+
+```yaml
+volumes:
+  - ${HOME}/gens:/data:ro
+```
 
 ## Architecture (short)
 
@@ -192,24 +230,15 @@ the FastAPI process on this machine.
 
 3. Open http://127.0.0.1:5173. Vite proxies `/api` to the FastAPI port.
 
-Or run the web UI and API together in Docker (YuNet + SFace ONNX files are
-copied into the image from Hugging Face / opencv_zoo):
-
-```bash
-docker compose up --build
-```
-
-Open http://127.0.0.1:8765. Choose detector/recognizer in Settings. Bins start
-**unchecked** for the zip; use **Include all in zip** or tick **in zip** per bin.
-Click a thumbnail to select it; **open ↗** (or Ctrl/Cmd-click, or right-click →
-Open in new tab) loads the original in a new window.
+Prefer Docker for a one-shot UI (models included): see [Docker (web UI)](#docker-web-ui).
 
 Flow: upload jpg/png/webp (corrupt files are skipped and listed) **or** type a
 folder path on this machine → set threshold / min-images / `face` vs
 `face+body` → preview bins with thumbnails → rename subjects, merge bins, split
 or exclude images → download `clonebins.zip` (`subject_XX/…`). Clustering is
 always a preview; nothing is written until you download the zip (that is the
-web equivalent of CLI `--dry-run` plus a later export).
+web equivalent of CLI `--dry-run` plus a later export). Bins start **unchecked**
+for the zip; **Include all in zip** / **open ↗** as in the Docker section.
 
 Privacy copy is in the header: processing is local / self-hosted, no cloud
 account.
@@ -350,7 +379,10 @@ packages/api/      FastAPI (clonebins-api)
 apps/web/          Vite + React UI
 apps/desktop/      Tauri 2 shell
 apps/ios/          SwiftUI + XcodeGen (LAN API client; Core ML stub)
+Dockerfile         web UI + API + six opencv_zoo ONNX files
+docker-compose.yml docker compose up --build → http://127.0.0.1:8765
 docs/architecture.md
+docs/demo/         README screenshot, GIF, and MP4
 tests/
 ```
 
