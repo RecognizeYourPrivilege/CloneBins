@@ -3,8 +3,8 @@
 Cluster AI-generated images by **face** and **body/identity**, then drop each
 identity into its own folder for LoRA training datasets.
 
-v0.1 is a local CLI, a local web UI, and a shared Python core. Desktop and iOS
-apps are still placeholders — they will wrap the same core later.
+v0.1 is a local CLI, a local web UI, a Tauri 2 desktop shell, and a shared
+Python core. iOS is still a placeholder — it will wrap the same core later.
 
 Processing is **offline-first**: images never leave the machine. Face model
 weights are downloaded once (optional if you only need appearance clustering).
@@ -19,7 +19,7 @@ One shared core, four clients:
 | `packages/cli` | **implemented** | Typer + Rich |
 | `packages/api` | **implemented** | FastAPI, imports `clonebins_core` |
 | `apps/web` | **implemented** | Vite + React + TypeScript |
-| `apps/desktop` | placeholder | Tauri 2 + React + Python sidecar (later) |
+| `apps/desktop` | **implemented** | Tauri 2 + `apps/web` + Python sidecar |
 | `apps/ios` | placeholder | SwiftUI / Core ML (later) |
 
 **Why this stack:** Python is the lingua franca of LoRA tooling and ONNX face
@@ -37,7 +37,8 @@ See [docs/architecture.md](docs/architecture.md) for the longer plan.
 - Linux or macOS
 - Python 3.10+
 - `pip` or [`uv`](https://docs.astral.sh/uv/)
-- OpenCV 4.x (pulled in automatically; the core package pins `opencv-python-headless>=4.8,<5`)
+- Node 20+ (web + desktop)
+- Rust 1.85+ (desktop / Tauri 2)
 
 ## Install
 
@@ -181,6 +182,34 @@ web equivalent of CLI `--dry-run` plus a later export).
 Privacy copy is in the header: processing is local / self-hosted, no cloud
 account.
 
+## Desktop app (Tauri 2)
+
+Native macOS + Linux window around the same web UI. The shell starts
+`clonebins-api` on `127.0.0.1:8765` if it is not already running (Python sidecar;
+same `clonebins_core` pipeline). **Browse** picks a source folder; **Save zip…**
+writes the export with a native save dialog.
+
+```bash
+python3 -m pip install -e packages/core -e packages/api
+cd apps/desktop
+npm install
+npm run dev
+```
+
+Linux extra packages: `libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev patchelf`.
+macOS: Xcode command-line tools.
+
+Release binary (no installer, good for VMs):
+
+```bash
+cd apps/desktop
+npm run build:unsigned
+# apps/desktop/src-tauri/target/release/clonebins-desktop
+```
+
+macOS `.app` / `.dmg`: `npm run build` on a Mac. Signing/notarization is not
+configured — see [apps/desktop/README.md](apps/desktop/README.md).
+
 ## Example: prep a LoRA dataset
 
 Goal: 10–30 images of **one** character, consistent identity, local files only.
@@ -236,7 +265,8 @@ packages/core/     shared pipeline (clonebins_core)
 packages/cli/      Typer CLI (clonebins)
 packages/api/      FastAPI (clonebins-api)
 apps/web/          Vite + React UI
-apps/desktop|ios/  placeholders
+apps/desktop/      Tauri 2 shell
+apps/ios/          placeholder
 docs/architecture.md
 tests/
 ```

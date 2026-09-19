@@ -45,3 +45,4 @@ demo_output/
 
 node_modules/
 apps/web/dist/
+apps/desktop/src-tauri/target/
