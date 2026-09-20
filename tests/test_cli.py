@@ -5,8 +5,8 @@ from pathlib import Path
 from typer.testing import CliRunner
 
 from clonebins_cli.main import app
-from portraits import write_identity_set
 from conftest import visible_help
+from portraits import write_identity_set
 
 runner = CliRunner()
 
@@ -15,6 +15,20 @@ def test_help():
     result = runner.invoke(app, ["--help"])
     assert result.exit_code == 0
     assert "cluster" in visible_help(result.stdout)
+
+
+def test_models_status_and_verify(tmp_path, monkeypatch):
+    monkeypatch.setenv("CLONEBINS_MODELS_DIR", str(tmp_path))
+    status = runner.invoke(app, ["models", "status"])
+    assert "missing" in status.stdout
+    help_models = runner.invoke(app, ["models", "--help"])
+    text = visible_help(help_models.stdout)
+    assert "status" in text
+    assert "download" in text
+    assert "verify" in text
+    verify = runner.invoke(app, ["models", "verify"])
+    assert verify.exit_code == 1
+    assert "missing" in verify.stdout
 
 
 def test_cluster_help():

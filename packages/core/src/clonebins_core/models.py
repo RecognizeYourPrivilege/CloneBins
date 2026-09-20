@@ -278,6 +278,38 @@ def ensure_face_models(
     return paths
 
 
+def missing_model_specs(models_dir: Path | None = None) -> list[dict]:
+    """Catalog entries that are not on disk yet (or too small to be valid)."""
+    catalog = catalog_status(models_dir)
+    missing: list[dict] = []
+    for family in ("yunet", "sface"):
+        for item in catalog[family]:
+            if not item["ready"]:
+                missing.append({**item, "family": family})
+    return missing
+
+
+def download_missing_face_models(
+    *,
+    models_dir: Path | None = None,
+    log=None,
+    all_variants: bool = True,
+    yunet_id: str = DEFAULT_YUNET_ID,
+    sface_id: str = DEFAULT_SFACE_ID,
+) -> Path:
+    """Download only files that are missing. Never re-fetches a valid cache hit."""
+    if all_variants:
+        return download_all_face_models(models_dir=models_dir, log=log)
+    ensure_face_models(
+        models_dir=models_dir,
+        download=True,
+        log=log,
+        yunet_id=yunet_id,
+        sface_id=sface_id,
+    )
+    return models_dir or default_models_dir()
+
+
 def download_all_face_models(*, models_dir: Path | None = None, log=None) -> Path:
     """Fetch every YuNet + SFace variant into the models directory."""
     root = models_dir or default_models_dir()
@@ -326,7 +358,7 @@ def _download_first_ok(urls: tuple[str, ...], dest: Path, *, min_bytes: int) -> 
 def _download_url(url: str, dest: Path, timeout: int = 180) -> None:
     request = urllib.request.Request(
         url,
-        headers={"User-Agent": "CloneBins/0.1 (local dataset clustering)"},
+        headers={"User-Agent": "CloneBins/0.1.1 (local dataset clustering)"},
     )
     with urllib.request.urlopen(request, timeout=timeout) as response, dest.open("wb") as handle:
         while True:

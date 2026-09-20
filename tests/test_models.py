@@ -6,6 +6,8 @@ from clonebins_core.models import (
     SFACE_MODELS,
     YUNET_MODELS,
     catalog_status,
+    download_missing_face_models,
+    missing_model_specs,
     resolve_model_paths,
 )
 
@@ -27,3 +29,23 @@ def test_catalog_status_lists_all_missing(tmp_path):
     assert len(catalog["yunet"]) == 3
     assert len(catalog["sface"]) == 3
     assert all(not item["ready"] for item in catalog["yunet"] + catalog["sface"])
+    missing = missing_model_specs(tmp_path)
+    assert len(missing) == 6
+
+
+def test_download_missing_skips_present(tmp_path, monkeypatch):
+    yunet = tmp_path / "face_detection_yunet_2023mar.onnx"
+    yunet.write_bytes(b"x" * 60_000)
+    calls: list[str] = []
+
+    def fake_download(urls, dest, min_bytes):
+        calls.append(dest.name)
+        dest.write_bytes(b"y" * (min_bytes + 10))
+
+    monkeypatch.setattr("clonebins_core.models._download_first_ok", fake_download)
+    download_missing_face_models(models_dir=tmp_path, all_variants=True)
+    assert yunet.name not in calls
+    assert "face_recognition_sface_2021dec.onnx" in calls
+    assert len(calls) == 5
+    download_missing_face_models(models_dir=tmp_path, all_variants=True)
+    assert len(calls) == 5

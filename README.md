@@ -3,8 +3,10 @@
 Cluster AI-generated images by **face** and **body/identity**, then drop each
 identity into its own folder for LoRA training datasets.
 
-v0.1 is a local CLI, a local web UI, a Tauri 2 desktop shell, an iOS SwiftUI
-client, and a shared Python core.
+v0.1.1 is a local CLI, a local web UI, a Tauri 2 desktop shell, an iOS SwiftUI
+client, and a shared Python core. New in this release: SMB/SFTP/FTP share
+caches, a `face+body` mixed-embedding fix, and Verify / Download for face
+models. See [CHANGELOG.md](CHANGELOG.md).
 
 Processing is **offline-first / user-controlled**: CLI, web, and desktop keep
 images on the machine that runs `clonebins_core`. The iOS app sends photos you
@@ -124,9 +126,10 @@ They are stored in `~/.cache/clonebins/models` (override with
 `CLONEBINS_MODELS_DIR`). After they exist, **no network is used**.
 
 ```bash
-clonebins models download          # default FP32 pair
-clonebins models download --all    # all six ONNX files
-clonebins models status
+clonebins models download          # default FP32 pair (skips files already cached)
+clonebins models download --all    # all six ONNX files; skips files already cached
+clonebins models status            # present vs missing
+clonebins models verify            # alias for status
 ```
 
 `clonebins cluster` will also try to download them on first run unless you pass
@@ -134,7 +137,9 @@ clonebins models status
 
 `--mode face+body` still runs if models are missing: it falls back to a local
 appearance embedding (color/layout) so you can dry-run the pipeline on any
-folder. Face-only mode needs the ONNX files for real identity bins.
+folder. Face-only mode needs the ONNX files for real identity bins. Mixed
+folders (some faces detected, some not) stay in one embedding matrix — v0.1.1
+fixes the `all input arrays must have the same shape` crash in that mode.
 
 InsightFace (`buffalo_s` / `buffalo_l`) is **not** required. The core exposes
 `clonebins_core.embed.insightface_backend.InsightFaceEmbedder` if you later
@@ -232,16 +237,66 @@ the FastAPI process on this machine.
 
 Prefer Docker for a one-shot UI (models included): see [Docker (web UI)](#docker-web-ui).
 
-Flow: upload jpg/png/webp (corrupt files are skipped and listed) **or** type a
-folder path on this machine → set threshold / min-images / `face` vs
-`face+body` → preview bins with thumbnails → rename subjects, merge bins, split
-or exclude images → download `clonebins.zip` (`subject_XX/…`). Clustering is
-always a preview; nothing is written until you download the zip (that is the
-web equivalent of CLI `--dry-run` plus a later export). Bins start **unchecked**
-for the zip; **Include all in zip** / **open ↗** as in the Docker section.
+**Face models in the UI:** use **Verify** (writes present/missing into the log
+box) then **Download missing** (inactive until Verify finds gaps; fetches only
+those files). The old “Download face models if missing” checkbox is gone — it
+did not surface progress. CLI: `clonebins models verify` / `download`.
+
+Flow: upload jpg/png/webp (corrupt files are skipped and listed), type a
+folder path on this machine, **or connect a network share** → set threshold /
+min-images / `face` vs `face+body` → preview bins with thumbnails → rename
+subjects, merge bins, split or exclude images → download `clonebins.zip`
+(`subject_XX/…`). Clustering is always a preview; nothing is written until you
+download the zip (that is the web equivalent of CLI `--dry-run` plus a later
+export). Bins start **unchecked** for the zip; **Include all in zip** /
+**open ↗** as in the Docker section.
 
 Privacy copy is in the header: processing is local / self-hosted, no cloud
 account.
+
+## Network shares (SMB, SFTP, FTP)
+
+Use a NAS or another machine on your LAN as the image source without rewriting
+the clustering core. The API copies matching `jpg` / `jpeg` / `png` / `webp`
+files into a temp cache under the job directory, then runs the same scan →
+embed → cluster path as **Use path**.
+
+In the web/desktop UI:
+
+1. Protocol: **SFTP** (default), **SMB**, or **FTP**.
+2. Host, optional port (22 / 445 / 21), and path.
+   - SFTP/FTP path is a remote directory, e.g. `/data/gens`.
+   - SMB path starts with the share name, e.g. `Photos/gens`.
+3. Username + password. SFTP also accepts a PEM private key (or a key file path
+   on the API host).
+4. **Probe share** lists how many images were found. **Cache & cluster** copies
+   them locally and starts clustering.
+
+Desktop (Tauri) uses the same form against the local sidecar. You can still
+**Browse** a folder the OS already mounted (`smb://` via Finder, `gio mount`,
+etc.) and **Use path**.
+
+API (credentials in the JSON body; not written to logs or job records):
+
+```bash
+curl -s http://127.0.0.1:8765/api/shares/probe \
+  -H 'Content-Type: application/json' \
+  -d '{"protocol":"sftp","host":"nas.local","path":"/gens","username":"you","password":"…"}'
+
+curl -s http://127.0.0.1:8765/api/jobs/from-share \
+  -H 'Content-Type: application/json' \
+  -d '{"protocol":"smb","host":"nas.local","path":"Photos/gens","username":"you","password":"…"}'
+```
+
+Security:
+
+- Passwords and keys are **not logged**. Job JSON never includes them.
+- Secrets are cleared from the request object after the transfer.
+- Credentials stay on the machine running `clonebins-api` (your laptop, a
+  self-hosted box, or the desktop sidecar). There is no CloneBins cloud.
+- Prefer SFTP with a key, or an SMB account that can only read the gens folder.
+- Docker: mount or reach the NAS from the container’s network; loopback shares
+  on the host are not visible unless you publish them into the container.
 
 ## Desktop app (Tauri 2)
 
@@ -274,13 +329,13 @@ GitHub Actions publishes Linux, macOS, and Windows installers on
 
 | File | Platform |
 | --- | --- |
-| `CloneBins-0.1.0-macos-arm64.dmg` | Apple Silicon |
-| `CloneBins-0.1.0-macos-x64.dmg` | Intel Mac |
-| `CloneBins-0.1.0-ubuntu-amd64.deb` | Ubuntu / Debian |
-| `CloneBins-0.1.0-linux-x64.AppImage` | Generic glibc Linux |
-| `CloneBins-0.1.0-archlinux-x86_64.pkg.tar.zst` | Arch |
-| `CloneBins-0.1.0-windows-x64-setup.exe` | Windows 10/11 NSIS (current user) |
-| `CloneBins-0.1.0-windows-x64.zip` | Windows portable (`CloneBins.exe` + `clonebins-api.exe`) |
+| `CloneBins-0.1.1-macos-arm64.dmg` | Apple Silicon |
+| `CloneBins-0.1.1-macos-x64.dmg` | Intel Mac |
+| `CloneBins-0.1.1-ubuntu-amd64.deb` | Ubuntu / Debian |
+| `CloneBins-0.1.1-linux-x64.AppImage` | Generic glibc Linux |
+| `CloneBins-0.1.1-archlinux-x86_64.pkg.tar.zst` | Arch |
+| `CloneBins-0.1.1-windows-x64-setup.exe` | Windows 10/11 NSIS (current user) |
+| `CloneBins-0.1.1-windows-x64.zip` | Windows portable (`CloneBins.exe` + `clonebins-api.exe`) |
 
 macOS DMGs are not notarized — see
 [apps/desktop/README.md](apps/desktop/README.md). The Windows installer is
@@ -357,7 +412,8 @@ filesystem; CloneBins copies if linking fails.
 - iOS v1 uploads the photos you pick to **your** `clonebins-api` (loopback or
   LAN). That is still not a hosted service.
 - The only optional vendor network call is fetching YuNet/SFace weights onto
-  the API/CLI host.
+  the API/CLI host (UI **Download missing**, or `clonebins models download`).
+- Share passwords/keys stay on that same host and are not logged.
 - Do not point `--input` at folders you would not want processed on that
   machine; output bins are extra copies/hardlinks of those files.
 
@@ -381,6 +437,7 @@ Dockerfile         web UI + API + six opencv_zoo ONNX files
 docker-compose.yml docker compose up --build → http://127.0.0.1:8765
 docs/architecture.md
 docs/demo/         README screenshot, GIF, and MP4
+CHANGELOG.md
 tests/
 ```
 
