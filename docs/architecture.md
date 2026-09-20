@@ -93,7 +93,7 @@ IP with `CLONEBINS_API_HOST=0.0.0.0`). It does not embed faces on-device in v1.
   absent ONNX files are fetched. CLI: `clonebins models status|verify|download`.
 - Web zip export: bins start unchecked; include individually or via Include all.
 - Detector/recognizer: YuNet 2023 FP32 / INT8 / INT8-BQ and SFace 2021 FP32 /
-  INT8 / INT8-BQ from opencv_zoo (Hugging Face mirrors). Docker bakes all six.
+  INT8 / INT8-BQ plus YuNet `2026may` from opencv_zoo (Hugging Face mirrors). Docker bakes all seven.
 - `min-images`: clusters smaller than the cutoff are reported and not exported
   by default (web: shown as “below min”, off in the zip until you include or merge).
 - Folder names are filesystem-safe: `subject_01`, `subject_02`, … (prefix

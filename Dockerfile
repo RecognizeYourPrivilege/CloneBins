@@ -28,7 +28,7 @@ COPY packages/api packages/api
 RUN pip install --no-cache-dir --upgrade pip \
     && pip install --no-cache-dir -e packages/core -e packages/api
 
-# opencv_zoo YuNet ×3 + SFace ×3 (Hugging Face, GitHub LFS mirrors as fallback)
+# opencv_zoo YuNet ×4 + SFace ×3 (Hugging Face, GitHub LFS mirrors as fallback)
 RUN mkdir -p /models \
     && python -m clonebins_core.models --all --dir /models
 
