@@ -1,6 +1,23 @@
-# Builds CloneBins.app on GitHub-hosted macOS (Apple Silicon + Intel) and
-# publishes both DMGs on a GitHub Release. Linux cannot produce a .app.
-# Rebuilds replace CloneBins-0.1.1-macos-arm64.dmg and macos-x64.dmg only.
+# Builds CloneBins.app on GitHub-hosted macOS and publishes both DMGs
+# on a GitHub Release. Linux cannot produce a .app.
+#
+#   dmg-arm64  → macos-latest  (Apple Silicon)
+#   dmg-x64    → macos-15-intel (native Intel; do not Rosetta-cross on arm64)
+#
+# v0.1.1 failed because the Intel job ran on macos-latest (arm64) under
+# `arch -x86_64`. setup-python's x64 interpreter is the python.org Framework
+# build, whose site-packages already had arm64 cryptography (pulled in by
+# paramiko/smbprotocol). PyInstaller then raised IncompatibleBinaryArchError.
+# Tag v0.1.1 was also cancelled: concurrency grouped every macOS release
+# together with cancel-in-progress, so the later main push aborted the tag.
+#
+# Rebuilds replace CloneBins-<ver>-macos-arm64.dmg and macos-x64.dmg only.
+# Apps are ad-hoc signed (`codesign --sign -`), not Developer ID / notarized.
+# Optional Apple secrets (not required for these unsigned DMGs):
+#   APPLE_CERTIFICATE, APPLE_CERTIFICATE_PASSWORD, APPLE_SIGNING_IDENTITY,
+#   APPLE_TEAM_ID, APPLE_ID, APPLE_APP_PASSWORD,
+#   APPLE_API_KEY, APPLE_API_KEY_ID, APPLE_API_ISSUER
+# See apps/desktop/README.md.
 name: Release macOS DMG
 
 on:
@@ -9,6 +26,8 @@ on:
       - "v*"
     branches:
       - main
+      # Feature-branch rebuild of the v0.1.1 assets (same pattern as linux-release).
+      - cursor/macos-dmg-v011-fd07
   workflow_dispatch:
     inputs:
       tag:
@@ -19,9 +38,10 @@ on:
 permissions:
   contents: write
 
+# Per-ref so a push to main cannot cancel the tag build (that dropped v0.1.1).
 concurrency:
-  group: release-macos
-  cancel-in-progress: true
+  group: release-macos-${{ github.ref }}
+  cancel-in-progress: false
 
 env:
   RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || (startsWith(github.ref, 'refs/tags/') && github.ref_name || 'v0.1.1') }}
@@ -29,18 +49,24 @@ env:
 jobs:
   macos-dmg:
     name: dmg-${{ matrix.arch }}
-    runs-on: macos-latest
-    timeout-minutes: 75
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
     strategy:
       fail-fast: false
       matrix:
         include:
           - arch: arm64
+            runner: macos-latest
             rust_target: aarch64-apple-darwin
             python_arch: arm64
+            pyinstaller_arch: arm64
           - arch: x64
+            # Native Intel. macos-13 is retired; macos-15-intel is the
+            # standard-hosted replacement (available through Aug 2027).
+            runner: macos-15-intel
             rust_target: x86_64-apple-darwin
             python_arch: x64
+            pyinstaller_arch: x86_64
     env:
       MACOSX_DEPLOYMENT_TARGET: "12.0"
     steps:
@@ -66,66 +92,59 @@ jobs:
       - uses: swatinem/rust-cache@v2
         with:
           workspaces: apps/desktop/src-tauri
-          key: ${{ matrix.arch }}
+          key: ${{ matrix.runner }}-${{ matrix.arch }}
 
-      - name: Install Python packages + PyInstaller
+      - name: Isolated venv + verify native extension arch
         run: |
           set -euo pipefail
-          PYTHON="${pythonLocation}/bin/python3"
-          run_py() {
-            if [[ "${{ matrix.arch }}" == "x64" ]]; then
-              arch -x86_64 "$PYTHON" "$@"
-            else
-              "$PYTHON" "$@"
-            fi
-          }
-          if [[ "${{ matrix.arch }}" == "x64" ]] && ! arch -x86_64 /usr/bin/true; then
-            sudo softwareupdate --install-rosetta --agree-to-license
-          fi
-          run_py -m pip install --upgrade pip
-          run_py -m pip install -e packages/core -e packages/api pyinstaller
-          run_py -c "import platform, sys; print(sys.executable, platform.machine(), platform.architecture())"
-          MACHINE="$(run_py -c 'import platform; print(platform.machine())')"
-          case "${{ matrix.arch }}" in
-            arm64) EXPECT=arm64 ;;
-            x64) EXPECT=x86_64 ;;
-          esac
-          if [[ "$MACHINE" != "$EXPECT" ]]; then
-            echo "Python arch is $MACHINE, expected $EXPECT for ${{ matrix.arch }}" >&2
-            file "$PYTHON" >&2
+          HOST_PY="${pythonLocation}/bin/python3"
+          test -x "$HOST_PY"
+          echo "host python: $HOST_PY"
+          file "$HOST_PY"
+          "$HOST_PY" -c "import platform, sys; print(sys.executable, sys.prefix, platform.machine(), sys.version)"
+
+          EXPECT="${{ matrix.pyinstaller_arch }}"
+          MACHINE="$("$HOST_PY" -c 'import platform; print(platform.machine())')"
+          if [[ "$MACHINE" != "$EXPECT" && "$MACHINE" != "i386" ]]; then
+            echo "Runner Python is $MACHINE, expected $EXPECT on ${{ matrix.runner }}" >&2
+            uname -m >&2
             exit 1
           fi
+
+          VENV="${RUNNER_TEMP}/cb-venv"
+          "$HOST_PY" -m venv "$VENV"
+          PY="$VENV/bin/python"
+          "$PY" -m pip install --upgrade pip
+          # Fresh venv so we never reuse the runner image's Framework
+          # site-packages (that is what leaked arm64 cryptography on v0.1.1).
+          "$PY" -m pip install --no-cache-dir -e packages/core -e packages/api pyinstaller
+          "$PY" -m pip install --no-cache-dir --force-reinstall cryptography
+
+          "$PY" -c '
+          import subprocess, sys
+          expect = "'"$EXPECT"'"
+          import cryptography.hazmat.bindings._rust as rust
+          path = rust.__file__
+          info = subprocess.check_output(["file", path], text=True)
+          print(path)
+          print(info.strip())
+          ok = expect in info or "universal" in info.lower()
+          if not ok:
+              raise SystemExit(f"cryptography extension is not {expect}: {info}")
+          '
+
+          {
+            echo "CLONEBINS_PY=$PY"
+            echo "CLONEBINS_VERSION=${RELEASE_TAG#v}"
+          } >> "$GITHUB_ENV"
+          echo "$VENV/bin" >> "$GITHUB_PATH"
 
       - name: Freeze clonebins-api sidecar
         run: |
           set -euo pipefail
-          PYTHON="${pythonLocation}/bin/python3"
-          run_py() {
-            if [[ "${{ matrix.arch }}" == "x64" ]]; then
-              arch -x86_64 "$PYTHON" "$@"
-            else
-              "$PYTHON" "$@"
-            fi
-          }
-          run_py -m PyInstaller \
-            --noconfirm --clean --onefile \
-            --name clonebins-api \
-            --hidden-import uvicorn.logging \
-            --hidden-import uvicorn.loops.auto \
-            --hidden-import uvicorn.protocols.http.auto \
-            --hidden-import uvicorn.protocols.websockets.auto \
-            --hidden-import uvicorn.lifespan.on \
-            --hidden-import sklearn.cluster \
-            --hidden-import sklearn.metrics.pairwise \
-            --collect-all clonebins_core \
-            --collect-all clonebins_api \
-            --exclude-module tkinter \
-            --exclude-module matplotlib \
-            --exclude-module sklearn.datasets \
-            --exclude-module sklearn.tests \
-            --exclude-module scipy.tests \
-            packages/api/src/clonebins_api/__main__.py
-          rm -rf build
+          chmod +x apps/desktop/scripts/freeze-python-bin.sh
+          TARGET_ARCH="${{ matrix.pyinstaller_arch }}" \
+            apps/desktop/scripts/freeze-python-bin.sh api "$CLONEBINS_PY"
           file dist/clonebins-api
           ls -lh dist/clonebins-api
           df -h .
@@ -141,9 +160,11 @@ jobs:
         # wrapping, which leaves nothing to inject the sidecar into.
         run: npx tauri build --target ${{ matrix.rust_target }} --bundles app
 
-      - name: Inject sidecar and wrap DMG
+      - name: Inject sidecar and wrap unsigned DMG
         run: |
+          set -euo pipefail
           chmod +x apps/desktop/scripts/package-macos-dmg.sh
+          VERSION="${RELEASE_TAG#v}"
           APP="apps/desktop/src-tauri/target/${{ matrix.rust_target }}/release/bundle/macos/CloneBins.app"
           if [[ ! -d "$APP" ]]; then
             APP="$(find apps/desktop/src-tauri/target -type d -name 'CloneBins.app' | head -n 1)"
@@ -153,44 +174,58 @@ jobs:
             find apps/desktop/src-tauri/target -maxdepth 6 -type d -print >&2 || true
             exit 1
           fi
+          # Drop compile leftovers so hdiutil scratch is not fighting cargo.
+          TARGET_REL="apps/desktop/src-tauri/target/${{ matrix.rust_target }}/release"
+          rm -rf "$TARGET_REL/deps" "$TARGET_REL/incremental" "$TARGET_REL/build" \
+            "$TARGET_REL/.fingerprint" "${RUNNER_TEMP}/cb-venv" || true
           mkdir -p dist/release
           df -h .
+          du -sh "$APP" dist/clonebins-api || true
           apps/desktop/scripts/package-macos-dmg.sh \
             dist/clonebins-api \
             "$APP" \
-            "dist/release/CloneBins-0.1.1-macos-${{ matrix.arch }}.dmg"
+            "dist/release/CloneBins-${VERSION}-macos-${{ matrix.arch }}.dmg"
           ls -lh dist/release
           file dist/release/*
 
       - uses: actions/upload-artifact@v4
         with:
           name: dmg-${{ matrix.arch }}
-          path: dist/release/CloneBins-0.1.1-macos-${{ matrix.arch }}.dmg
+          path: dist/release/CloneBins-*-macos-${{ matrix.arch }}.dmg
           if-no-files-found: error
 
   publish:
     needs: macos-dmg
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/download-artifact@v4
+        continue-on-error: true
         with:
-          merge-multiple: true
+          name: dmg-arm64
+          path: dist/release
+
+      - uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: dmg-x64
           path: dist/release
 
       - name: List DMGs
-        run: ls -lh dist/release
+        run: ls -lh dist/release || true
 
-      - name: Delete previous macOS DMGs on v0.1.1
+      - name: Delete previous macOS DMGs on the release tag
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           TAG="${{ env.RELEASE_TAG }}"
+          VERSION="${TAG#v}"
           gh release view "$TAG" --json assets --jq '.assets[].name' || true
-          gh release delete-asset "$TAG" CloneBins-0.1.1-macos-arm64.dmg --yes || true
-          gh release delete-asset "$TAG" CloneBins-0.1.1-macos-x64.dmg --yes || true
+          gh release delete-asset "$TAG" "CloneBins-${VERSION}-macos-arm64.dmg" --yes || true
+          gh release delete-asset "$TAG" "CloneBins-${VERSION}-macos-x64.dmg" --yes || true
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
@@ -199,10 +234,16 @@ jobs:
           name: CloneBins ${{ env.RELEASE_TAG }}
           draft: false
           prerelease: false
-          fail_on_unmatched_files: true
-          files: |
-            dist/release/CloneBins-0.1.1-macos-arm64.dmg
-            dist/release/CloneBins-0.1.1-macos-x64.dmg
+          fail_on_unmatched_files: false
+          files: dist/release/*
           body_path: .github/release-notes-v0.1.1.md
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Require both macOS DMGs
+        run: |
+          set -euo pipefail
+          VERSION="${RELEASE_TAG#v}"
+          test -f "dist/release/CloneBins-${VERSION}-macos-arm64.dmg"
+          test -f "dist/release/CloneBins-${VERSION}-macos-x64.dmg"
+          ls -lh dist/release
