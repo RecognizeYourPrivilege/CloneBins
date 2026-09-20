@@ -174,8 +174,13 @@ jobs:
             find apps/desktop/src-tauri/target -maxdepth 6 -type d -print >&2 || true
             exit 1
           fi
+          # Drop compile leftovers so hdiutil scratch is not fighting cargo.
+          TARGET_REL="apps/desktop/src-tauri/target/${{ matrix.rust_target }}/release"
+          rm -rf "$TARGET_REL/deps" "$TARGET_REL/incremental" "$TARGET_REL/build" \
+            "$TARGET_REL/.fingerprint" "${RUNNER_TEMP}/cb-venv" || true
           mkdir -p dist/release
           df -h .
+          du -sh "$APP" dist/clonebins-api || true
           apps/desktop/scripts/package-macos-dmg.sh \
             dist/clonebins-api \
             "$APP" \
