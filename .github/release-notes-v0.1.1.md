@@ -22,13 +22,15 @@ Expected asset names:
 
 | File | Platform |
 | --- | --- |
-| `CloneBins-0.1.1-macos-arm64.dmg` | Apple Silicon (build from source / Actions) |
-| `CloneBins-0.1.1-macos-x64.dmg` | Intel Mac |
+| `CloneBins-0.1.1-macos-arm64.dmg` | Apple Silicon (unsigned / ad-hoc signed) |
+| `CloneBins-0.1.1-macos-x64.dmg` | Intel Mac (unsigned / ad-hoc signed) |
 | `CloneBins-0.1.1-ubuntu-amd64.deb` | Ubuntu / Debian |
 | `CloneBins-0.1.1-linux-x64.AppImage` | Generic glibc Linux |
 | `CloneBins-0.1.1-archlinux-x86_64.pkg.tar.zst` | Arch |
 | `CloneBins-0.1.1-windows-x64-setup.exe` | Windows 10/11 NSIS |
 | `CloneBins-0.1.1-windows-x64.zip` | Windows portable |
+
+macOS DMGs are **unsigned / ad-hoc signed** (not Developer ID, not notarized). First launch: right-click CloneBins.app → Open. Each DMG includes `README-UNSIGNED.txt`. Apple notarization secrets (optional, not used by this release) are listed in `apps/desktop/README.md`.
 
 iOS remains build-from-source (`apps/ios`, XcodeGen).
 
