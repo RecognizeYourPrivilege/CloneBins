@@ -181,15 +181,28 @@ export default function App() {
     setError(null);
     try {
       const status = await api.getModelStatus();
+      const yunet = status.yunet ?? [];
+      const sface = status.sface ?? [];
+      const expected = status.expected ?? yunet.length + sface.length;
       const lines = [
         `Verify · cache ${status.models_dir}`,
-        ...status.yunet.map((spec) => `  YuNet ${spec.id}: ${spec.ready ? "ready" : "MISSING"}  (${spec.label})`),
-        ...status.sface.map((spec) => `  SFace ${spec.id}: ${spec.ready ? "ready" : "MISSING"}  (${spec.label})`),
-      ];
+        status.home ? `Home ${status.home}` : "",
+        `Expected ${expected} ONNX files (${yunet.length} YuNet + ${sface.length} SFace)`,
+        ...yunet.map(
+          (spec) =>
+            `  YuNet ${spec.id}: ${spec.ready ? "ready" : "MISSING"}  ${spec.filename}${spec.ready ? `  ${spec.bytes} B` : ""}`,
+        ),
+        ...sface.map(
+          (spec) =>
+            `  SFace ${spec.id}: ${spec.ready ? "ready" : "MISSING"}  ${spec.filename}${spec.ready ? `  ${spec.bytes} B` : ""}`,
+        ),
+      ].filter(Boolean);
       if (status.missing_count === 0) {
-        lines.push("All six opencv_zoo variants are present. Download stays inactive.");
+        lines.push("All 7 opencv_zoo ONNX files are present. Download stays inactive.");
       } else {
-        lines.push(`${status.missing_count} missing — Download is now active (fetches only missing files).`);
+        lines.push(
+          `${status.missing_count} missing — Download is now active (fetches only missing files from Hugging Face).`,
+        );
       }
       setModelLog(lines);
       setModelMissing(status.missing_count);
@@ -455,6 +468,7 @@ export default function App() {
                 { id: "2023mar", label: "YuNet 2023 FP32", notes: "" },
                 { id: "2023mar_int8", label: "YuNet 2023 INT8", notes: "" },
                 { id: "2023mar_int8bq", label: "YuNet 2023 INT8-BQ", notes: "" },
+                { id: "2026may", label: "YuNet 2026 dynamic", notes: "" },
               ]).map((spec) => (
                 <option key={spec.id} value={spec.id}>
                   {spec.label}

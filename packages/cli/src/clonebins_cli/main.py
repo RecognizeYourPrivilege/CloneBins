@@ -114,7 +114,7 @@ def version() -> None:
     try:
         console.print(pkg_version("clonebins"))
     except PackageNotFoundError:
-        console.print("0.1.1")
+        console.print("0.1.2")
 
 
 @app.command()
@@ -169,7 +169,10 @@ def cluster(
     ] = True,
     yunet: Annotated[
         str,
-        typer.Option("--yunet", help="YuNet detector: 2023mar | 2023mar_int8 | 2023mar_int8bq."),
+        typer.Option(
+            "--yunet",
+            help="YuNet detector: 2023mar | 2023mar_int8 | 2023mar_int8bq | 2026may.",
+        ),
     ] = DEFAULT_YUNET_ID,
     sface: Annotated[
         str,
@@ -263,10 +266,14 @@ def models_status() -> None:
     directory = default_models_dir()
     catalog = catalog_status(directory)
     console.print(f"{directory}")
+    console.print(
+        f"Expected {catalog['expected']} ONNX files "
+        f"({catalog['yunet_count']} YuNet + {catalog['sface_count']} SFace)"
+    )
     for family in ("yunet", "sface"):
         for spec in catalog[family]:
             mark = "ready" if spec["ready"] else "missing"
-            console.print(f"  {family} {spec['id']}: {mark}  ({spec['label']})")
+            console.print(f"  {family} {spec['id']}: {mark}  {spec['filename']}")
     raise typer.Exit(code=0 if models_present(directory) else 1)
 
 
