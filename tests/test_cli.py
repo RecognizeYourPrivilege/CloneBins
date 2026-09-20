@@ -29,6 +29,8 @@ def test_models_status_and_verify(tmp_path, monkeypatch):
     verify = runner.invoke(app, ["models", "verify"])
     assert verify.exit_code == 1
     assert "missing" in verify.stdout
+    assert "2026may" in verify.stdout
+    assert "face_detection_yunet" in verify.stdout or "yunet" in verify.stdout
 
 
 def test_cluster_help():

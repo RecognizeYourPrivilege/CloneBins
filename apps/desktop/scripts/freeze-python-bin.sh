@@ -23,9 +23,11 @@ case "$KIND" in
       --hidden-import smbclient
       --hidden-import smbprotocol
       --hidden-import cryptography
+      --hidden-import certifi
       --collect-all clonebins_api
       --collect-all paramiko
       --collect-all smbprotocol
+      --collect-all certifi
     )
     ;;
   cli)

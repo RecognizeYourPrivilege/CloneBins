@@ -37,8 +37,19 @@ def test_models_status_and_download_skips_present(tmp_path, monkeypatch):
     status = client.get("/api/models/status")
     assert status.status_code == 200, status.text
     body = status.json()
-    assert body["missing_count"] == 6
-    assert {item["filename"] for item in body["missing"]}
+    assert body["missing_count"] == 7
+    assert body["expected"] == 7
+    assert body["yunet_count"] == 4
+    assert body["sface_count"] == 3
+    assert {item["filename"] for item in body["missing"]} == {
+        "face_detection_yunet_2023mar.onnx",
+        "face_detection_yunet_2023mar_int8.onnx",
+        "face_detection_yunet_2023mar_int8bq.onnx",
+        "face_detection_yunet_2026may.onnx",
+        "face_recognition_sface_2021dec.onnx",
+        "face_recognition_sface_2021dec_int8.onnx",
+        "face_recognition_sface_2021dec_int8bq.onnx",
+    }
 
     calls: list[str] = []
 
@@ -59,7 +70,8 @@ def test_models_status_and_download_skips_present(tmp_path, monkeypatch):
         time.sleep(0.05)
     assert last["status"] == "done", last
     assert last["missing_count"] == 0
-    assert len(calls) == 6
+    assert len(calls) == 7
+    assert "face_detection_yunet_2026may.onnx" in calls
     assert all("http" not in line.lower() or "password" not in line.lower() for line in last["logs"])
 
     calls.clear()

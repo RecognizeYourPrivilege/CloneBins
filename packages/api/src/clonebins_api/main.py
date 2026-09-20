@@ -99,6 +99,7 @@ def _models_payload(models_dir: Path | None = None) -> dict:
         "missing": missing,
         "missing_count": len(missing),
         "ready": models_present(directory),
+        "catalog_ready": catalog["all_ready"],
     }
 
 
@@ -159,7 +160,17 @@ def models_download_status(task_id: str) -> dict:
 
 def _run_model_download(task: _ModelTask, body: ModelDownloadRequest) -> None:
     directory = default_models_dir()
+    catalog = catalog_status(directory)
     missing = missing_model_specs(directory)
+    task.log(f"Cache {directory} (home {catalog['home']})")
+    expected = catalog["expected"]
+    n_yunet = catalog["yunet_count"]
+    n_sface = catalog["sface_count"]
+    task.log(f"Verify {expected} ONNX files ({n_yunet} YuNet + {n_sface} SFace)")
+    for family in ("yunet", "sface"):
+        for item in catalog[family]:
+            mark = "ready" if item["ready"] else "MISSING"
+            task.log(f"  {family} {item['id']}: {mark}  {item['filename']}")
     if not missing:
         task.log("Verify: every catalogued YuNet / SFace file is already present.")
         task.log("Nothing to download.")

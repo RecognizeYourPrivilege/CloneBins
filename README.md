@@ -3,10 +3,10 @@
 Cluster AI-generated images by **face** and **body/identity**, then drop each
 identity into its own folder for LoRA training datasets.
 
-v0.1.1 is a local CLI, a local web UI, a Tauri 2 desktop shell, an iOS SwiftUI
-client, and a shared Python core. New in this release: SMB/SFTP/FTP share
-caches, a `face+body` mixed-embedding fix, and Verify / Download for face
-models. See [CHANGELOG.md](CHANGELOG.md).
+v0.1.2 is a local CLI, a local web UI, a Tauri 2 desktop shell, an iOS SwiftUI
+client, and a shared Python core. New in this release: macOS Verify/Download
+looks in `~/.cache/clonebins/models` (home expanded correctly) and checks all
+seven YuNet + SFace ONNX files. See [CHANGELOG.md](CHANGELOG.md).
 
 Processing is **offline-first / user-controlled**: CLI, web, and desktop keep
 images on the machine that runs `clonebins_core`. The iOS app sends photos you
@@ -27,8 +27,8 @@ The GIF plays inline on GitHub. Click it for the [full-length MP4](docs/demo/web
 
 ## Docker (web UI)
 
-One command runs the API, the Vite-built UI, and **all six** opencv_zoo ONNX
-weights (3 YuNet + 3 SFace) baked into the image. No separate `clonebins-api`
+One command runs the API, the Vite-built UI, and **all seven** opencv_zoo ONNX
+weights (4 YuNet + 3 SFace) baked into the image. No separate `clonebins-api`
 process, no Node toolchain.
 
 ```bash
@@ -41,7 +41,7 @@ Open **http://127.0.0.1:8765**.
 | --- | --- |
 | UI | `apps/web` production build, served by FastAPI |
 | API | `clonebins-api` on `0.0.0.0:8765` |
-| YuNet | `2023mar` FP32 (default), `2023mar_int8`, `2023mar_int8bq` |
+| YuNet | `2023mar` FP32 (default), `2023mar_int8`, `2023mar_int8bq`, `2026may` dynamic |
 | SFace | `2021dec` FP32 (default), `2021dec_int8`, `2021dec_int8bq` |
 
 Files: [`Dockerfile`](Dockerfile), [`docker-compose.yml`](docker-compose.yml).
@@ -114,20 +114,21 @@ uv run clonebins --help
 
 Default face clustering uses two local ONNX weights from the OpenCV zoo
 (Hugging Face `opencv/face_detection_yunet` and `opencv/face_recognition_sface`).
-Each family has three variants; the Docker web image embeds all six:
+YuNet has four ONNX files and SFace has three; the Docker web image embeds all seven:
 
 | Detector (YuNet) | Recognizer (SFace) |
 | --- | --- |
 | `2023mar` FP32 (default) | `2021dec` FP32 (default) |
 | `2023mar_int8` faster | `2021dec_int8` faster |
 | `2023mar_int8bq` block-quant | `2021dec_int8bq` block-quant |
+| `2026may` dynamic H/W | |
 
 They are stored in `~/.cache/clonebins/models` (override with
 `CLONEBINS_MODELS_DIR`). After they exist, **no network is used**.
 
 ```bash
 clonebins models download          # default FP32 pair (skips files already cached)
-clonebins models download --all    # all six ONNX files; skips files already cached
+clonebins models download --all    # all seven ONNX files; skips files already cached
 clonebins models status            # present vs missing
 clonebins models verify            # alias for status
 ```
@@ -329,13 +330,13 @@ GitHub Actions publishes Linux, macOS, and Windows installers on
 
 | File | Platform |
 | --- | --- |
-| `CloneBins-0.1.1-macos-arm64.dmg` | Apple Silicon (unsigned / ad-hoc signed) |
-| `CloneBins-0.1.1-macos-x64.dmg` | Intel Mac (unsigned / ad-hoc signed) |
-| `CloneBins-0.1.1-ubuntu-amd64.deb` | Ubuntu / Debian |
-| `CloneBins-0.1.1-linux-x64.AppImage` | Generic glibc Linux |
-| `CloneBins-0.1.1-archlinux-x86_64.pkg.tar.zst` | Arch |
-| `CloneBins-0.1.1-windows-x64-setup.exe` | Windows 10/11 NSIS (current user) |
-| `CloneBins-0.1.1-windows-x64.zip` | Windows portable (`CloneBins.exe` + `clonebins-api.exe`) |
+| `CloneBins-0.1.2-macos-arm64.dmg` | Apple Silicon (unsigned / ad-hoc signed) |
+| `CloneBins-0.1.2-macos-x64.dmg` | Intel Mac (unsigned / ad-hoc signed) |
+| `CloneBins-0.1.2-ubuntu-amd64.deb` | Ubuntu / Debian |
+| `CloneBins-0.1.2-linux-x64.AppImage` | Generic glibc Linux |
+| `CloneBins-0.1.2-archlinux-x86_64.pkg.tar.zst` | Arch |
+| `CloneBins-0.1.2-windows-x64-setup.exe` | Windows 10/11 NSIS (current user) |
+| `CloneBins-0.1.2-windows-x64.zip` | Windows portable (`CloneBins.exe` + `clonebins-api.exe`) |
 
 macOS DMGs are **unsigned / ad-hoc signed**, not notarized — see
 [apps/desktop/README.md](apps/desktop/README.md) (optional Apple secrets).

@@ -15,6 +15,7 @@ process. There is no cloud account.
 Bind `127.0.0.1` (default) for web/desktop/Simulator. For a physical iPhone on
 the same Wi-Fi: `CLONEBINS_API_HOST=0.0.0.0 clonebins-api`.
 
-v0.1.1 extras: `POST /api/jobs/from-share` and `POST /api/shares/probe` (SMB,
+v0.1.2 extras: `POST /api/jobs/from-share` and `POST /api/shares/probe` (SMB,
 SFTP, FTP → local cache). `GET /api/models/status` and `POST /api/models/download`
-for Verify / Download missing. Share passwords are not logged.
+list all seven YuNet + SFace ONNX files and download only missing ones from
+Hugging Face. Share passwords are not logged.

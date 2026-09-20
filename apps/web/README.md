@@ -34,7 +34,7 @@ Bins are **not** in the zip until you tick **in zip** or **Include all in zip**.
 
 ## Docker
 
-From the repo root (API + built UI + all six opencv_zoo ONNX files):
+From the repo root (API + built UI + all seven opencv_zoo ONNX files):
 
 ```bash
 docker compose up --build
