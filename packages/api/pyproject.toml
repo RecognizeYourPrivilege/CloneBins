@@ -1,6 +1,6 @@
 [project]
 name = "clonebins-api"
-version = "0.1.0"
+version = "0.1.1"
 description = "Local FastAPI server wrapping clonebins_core for the web UI."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -11,6 +11,8 @@ dependencies = [
   "fastapi>=0.110",
   "uvicorn[standard]>=0.27",
   "python-multipart>=0.0.9",
+  "paramiko>=3.4",
+  "smbprotocol>=1.13",
 ]
 
 [project.scripts]

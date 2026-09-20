@@ -78,11 +78,11 @@ GitHub Actions publishes installers on
 
 | File | Distro |
 | --- | --- |
-| `CloneBins-0.1.0-ubuntu-amd64.deb` | Ubuntu / Debian (`sudo apt install ./…deb`) |
-| `CloneBins-0.1.0-linux-x64.AppImage` | Generic glibc (`chmod +x` then run) |
-| `CloneBins-0.1.0-archlinux-x86_64.pkg.tar.zst` | Arch (`sudo pacman -U`) |
-| `CloneBins-0.1.0-windows-x64-setup.exe` | Windows 10/11 NSIS |
-| `CloneBins-0.1.0-windows-x64.zip` | Windows portable zip |
+| `CloneBins-0.1.1-ubuntu-amd64.deb` | Ubuntu / Debian (`sudo apt install ./…deb`) |
+| `CloneBins-0.1.1-linux-x64.AppImage` | Generic glibc (`chmod +x` then run) |
+| `CloneBins-0.1.1-archlinux-x86_64.pkg.tar.zst` | Arch (`sudo pacman -U`) |
+| `CloneBins-0.1.1-windows-x64-setup.exe` | Windows 10/11 NSIS |
+| `CloneBins-0.1.1-windows-x64.zip` | Windows portable zip |
 
 Ubuntu and Arch packages are the Tauri window plus a frozen `clonebins-api`
 sidecar in `/usr/bin`.
@@ -94,7 +94,7 @@ sidecar in `dist/clonebins-api`):
 apps/desktop/scripts/package-linux.sh deb \
   --desktop apps/desktop/src-tauri/target/release/clonebins-desktop \
   --api dist/clonebins-api \
-  --out dist/release/CloneBins-0.1.0-ubuntu-amd64.deb
+  --out dist/release/CloneBins-0.1.1-ubuntu-amd64.deb
 ```
 
 `arch` mode writes `.pkg.tar.zst`. See `.github/workflows/release-linux.yml`.

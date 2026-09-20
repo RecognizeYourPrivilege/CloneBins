@@ -19,7 +19,7 @@ from clonebins_core.models import (
     YUNET_BY_ID,
     catalog_status,
     default_models_dir,
-    download_all_face_models,
+    download_missing_face_models,
     ensure_face_models,
     models_present,
 )
@@ -114,7 +114,7 @@ def version() -> None:
     try:
         console.print(pkg_version("clonebins"))
     except PackageNotFoundError:
-        console.print("0.1.0")
+        console.print("0.1.1")
 
 
 @app.command()
@@ -270,6 +270,12 @@ def models_status() -> None:
     raise typer.Exit(code=0 if models_present(directory) else 1)
 
 
+@models_app.command("verify")
+def models_verify() -> None:
+    """Alias for ``status`` — list present vs missing YuNet / SFace files."""
+    models_status()
+
+
 @models_app.command("download")
 def models_download(
     models_dir: Annotated[
@@ -283,21 +289,30 @@ def models_download(
     yunet: Annotated[str, typer.Option("--yunet")] = DEFAULT_YUNET_ID,
     sface: Annotated[str, typer.Option("--sface")] = DEFAULT_SFACE_ID,
 ) -> None:
-    """Download YuNet + SFace ONNX weights into the local cache (one-time network)."""
+    """Download YuNet + SFace ONNX weights into the local cache (one-time network).
+
+    Already-valid files are skipped. ``--all`` fills every missing catalog entry;
+    the default only fetches the selected YuNet + SFace pair.
+    """
     try:
-        if all_variants:
-            root = download_all_face_models(models_dir=models_dir, log=err_console.print)
-            console.print(f"All variants in {root}")
-            return
-        paths = ensure_face_models(
+        root = download_missing_face_models(
             models_dir=models_dir,
-            download=True,
             log=err_console.print,
+            all_variants=all_variants,
             yunet_id=yunet,
             sface_id=sface,
         )
+        if not all_variants:
+            paths = ensure_face_models(
+                models_dir=models_dir,
+                download=False,
+                yunet_id=yunet,
+                sface_id=sface,
+            )
+            console.print(f"YuNet: {paths.yunet}")
+            console.print(f"SFace: {paths.sface}")
+            return
     except Exception as exc:
         err_console.print(f"[red]{exc}[/red]")
         raise typer.Exit(code=1) from exc
-    console.print(f"YuNet: {paths.yunet}")
-    console.print(f"SFace: {paths.sface}")
+    console.print(f"All variants in {root}")

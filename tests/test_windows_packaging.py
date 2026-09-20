@@ -19,13 +19,13 @@ def test_package_windows_zip_and_nsis(tmp_path: Path) -> None:
     desktop = tmp_path / "CloneBins.exe"
     api = tmp_path / "clonebins-api.exe"
     loader = tmp_path / "WebView2Loader.dll"
-    installer = tmp_path / "CloneBins_0.1.0_x64-setup.exe"
+    installer = tmp_path / "CloneBins_0.1.1_x64-setup.exe"
     desktop.write_bytes(b"MZ-desktop")
     api.write_bytes(b"MZ-api")
     loader.write_bytes(b"MZ-webview")
     installer.write_bytes(b"MZ-nsis")
 
-    out_zip = tmp_path / "CloneBins-0.1.0-windows-x64.zip"
+    out_zip = tmp_path / "CloneBins-0.1.1-windows-x64.zip"
     _run(
         [
             "bash",
@@ -50,7 +50,7 @@ def test_package_windows_zip_and_nsis(tmp_path: Path) -> None:
         assert zf.read("CloneBins/CloneBins.exe") == b"MZ-desktop"
         assert zf.read("CloneBins/clonebins-api.exe") == b"MZ-api"
 
-    out_setup = tmp_path / "CloneBins-0.1.0-windows-x64-setup.exe"
+    out_setup = tmp_path / "CloneBins-0.1.1-windows-x64-setup.exe"
     _run(
         [
             "bash",

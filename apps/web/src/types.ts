@@ -2,6 +2,8 @@ export type ClusterMode = "face" | "face+body";
 
 export type JobStatus = "ready" | "clustering" | "done" | "error" | "cancelled";
 
+export type ShareProtocol = "smb" | "sftp" | "ftp";
+
 export type ClusterSettings = {
   threshold: number;
   min_images: number;
@@ -11,6 +13,16 @@ export type ClusterSettings = {
   keep_names: boolean;
   yunet: "2023mar" | "2023mar_int8" | "2023mar_int8bq";
   sface: "2021dec" | "2021dec_int8" | "2021dec_int8bq";
+};
+
+export type ShareRequest = {
+  protocol: ShareProtocol;
+  host: string;
+  port: string;
+  path: string;
+  username: string;
+  password: string;
+  private_key: string;
 };
 
 export type JobImage = {
@@ -74,4 +86,25 @@ export type ModelSpec = {
   notes: string;
   ready: boolean;
   bytes: number;
+  family?: string;
+};
+
+export type ModelStatus = {
+  models_dir: string;
+  yunet: ModelSpec[];
+  sface: ModelSpec[];
+  default_yunet: string;
+  default_sface: string;
+  missing: ModelSpec[];
+  missing_count: number;
+  ready: boolean;
+};
+
+export type ModelDownloadTask = {
+  id: string;
+  status: "running" | "done" | "error";
+  logs: string[];
+  error: string | null;
+  missing: ModelSpec[];
+  missing_count: number;
 };
