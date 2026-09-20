@@ -24,7 +24,16 @@ def test_macos_release_uses_native_intel_runner() -> None:
     assert "CloneBins-${VERSION}-macos-${{ matrix.arch }}.dmg" in text
     assert "APPLE_CERTIFICATE" in text
     assert "APPLE_API_KEY" in text
-    assert "README-UNSIGNED" in PACKAGE.read_text(encoding="utf-8")
+    pkg = PACKAGE.read_text(encoding="utf-8")
+    assert "README-UNSIGNED" in pkg
+    # macos-15-intel undersized -srcfolder images; we allocate explicitly.
+    assert "hdiutil convert" in pkg
+    assert "SIZE_MB" in pkg
+    assert "hdiutil create" in pkg
+    assert all(
+        "-srcfolder" not in line or line.lstrip().startswith("#")
+        for line in pkg.splitlines()
+    )
 
 
 def test_freeze_script_collects_share_deps() -> None:
