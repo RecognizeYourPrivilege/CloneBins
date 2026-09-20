@@ -28,6 +28,19 @@ trap 'rm -rf "$STAGING"' EXIT
 # Move (not copy) the .app so wrapping does not need 2× disk for the sidecar.
 mv "$APP" "$STAGING/CloneBins.app"
 ln -s /Applications "$STAGING/Applications"
+cat > "$STAGING/README-UNSIGNED.txt" <<'EOF'
+CloneBins macOS build — unsigned / ad-hoc signed
+
+This DMG is installable but not Developer ID signed or notarized.
+Gatekeeper will warn on first launch.
+
+Install:
+  1. Drag CloneBins.app to Applications
+  2. Right-click CloneBins.app → Open (or System Settings → Privacy & Security)
+
+To publish notarized builds, add the Apple secrets listed in
+apps/desktop/README.md and re-run "Release macOS DMG".
+EOF
 
 mkdir -p "$(dirname "$DMG_OUT")"
 rm -f "$DMG_OUT"

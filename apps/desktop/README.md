@@ -127,9 +127,36 @@ Produces `src-tauri/target/release/bundle/dmg/` and
 `clonebins-api` sidecar into `Contents/MacOS/` and wraps a DMG (see
 `scripts/package-macos-dmg.sh`).
 
-Apple notarization / Developer ID signing is **not** configured. For a local
-unsigned build: `codesign --force --deep --sign - CloneBins.app`, or right-click
-→ Open. Minimum macOS: 12.
+Apple notarization / Developer ID signing is **not** configured. CI ad-hoc
+signs (`codesign --force --deep --sign -`) so the DMG is installable: drag
+to Applications, then right-click → Open. Each DMG also has
+`README-UNSIGNED.txt`. Minimum macOS: 12.
+
+Intel CI uses the `macos-15-intel` runner (native x86_64). Do not freeze the
+sidecar under Rosetta on Apple Silicon: `paramiko` / `smbprotocol` pull
+`cryptography`, and the runner Framework Python’s arm64 wheel makes
+PyInstaller fail with `IncompatibleBinaryArchError`.
+
+### Optional Apple signing secrets
+
+Not required for the unsigned v0.1.1 DMGs. Add these GitHub Actions secrets
+only if you want CI to Developer ID sign and notarize later:
+
+| Secret | Purpose |
+| --- | --- |
+| `APPLE_CERTIFICATE` | Base64-encoded Developer ID Application `.p12` |
+| `APPLE_CERTIFICATE_PASSWORD` | Password for that `.p12` |
+| `APPLE_SIGNING_IDENTITY` | e.g. `Developer ID Application: Name (TEAMID)` |
+| `APPLE_TEAM_ID` | 10-character Team ID |
+| `APPLE_ID` | Apple ID email for `notarytool` |
+| `APPLE_APP_PASSWORD` | App-specific password |
+| `APPLE_API_KEY` | App Store Connect API key (`.p8` contents) |
+| `APPLE_API_KEY_ID` | Key ID |
+| `APPLE_API_ISSUER` | Issuer UUID |
+
+Until those exist, “Release macOS DMG” keeps producing unsigned / ad-hoc
+DMGs and attaches them to the tag (`workflow_dispatch` with `tag=v0.1.1`
+rebuilds the same release).
 
 ### Windows
 
