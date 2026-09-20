@@ -1,17 +1,36 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as api from "./api";
 import { isTauriRuntime, pickDirectory } from "./desktop";
-import type { ClusterSettings, Health, Job, JobCluster, JobImage } from "./types";
+import type {
+  ClusterSettings,
+  Health,
+  Job,
+  JobCluster,
+  JobImage,
+  ModelDownloadTask,
+  ShareProtocol,
+  ShareRequest,
+} from "./types";
 
 const DEFAULT_SETTINGS: ClusterSettings = {
   threshold: 0.45,
   min_images: 2,
   mode: "face+body",
   subject_prefix: "subject",
-  download_models: true,
+  download_models: false,
   keep_names: true,
   yunet: "2023mar",
   sface: "2021dec",
+};
+
+const EMPTY_SHARE: ShareRequest = {
+  protocol: "sftp",
+  host: "",
+  port: "",
+  path: "",
+  username: "",
+  password: "",
+  private_key: "",
 };
 
 export default function App() {
@@ -24,6 +43,13 @@ export default function App() {
   const [desktop, setDesktop] = useState(false);
   const [selectedClusters, setSelectedClusters] = useState<Set<string>>(new Set());
   const [selectedImages, setSelectedImages] = useState<Set<string>>(new Set());
+  const [share, setShare] = useState<ShareRequest>(EMPTY_SHARE);
+  const [modelLog, setModelLog] = useState<string[]>([
+    "Face models stay on this machine. Click Verify to see what is cached.",
+  ]);
+  const [modelMissing, setModelMissing] = useState<number | null>(null);
+  const [modelTask, setModelTask] = useState<ModelDownloadTask | null>(null);
+  const logBox = useRef<HTMLPreElement | null>(null);
 
   useEffect(() => {
     setDesktop(isTauriRuntime());
@@ -40,6 +66,28 @@ export default function App() {
     }, 280);
     return () => window.clearInterval(timer);
   }, [job]);
+
+  useEffect(() => {
+    if (!modelTask || modelTask.status !== "running") return;
+    const timer = window.setInterval(() => {
+      api
+        .getModelDownload(modelTask.id)
+        .then((next) => {
+          setModelTask(next);
+          setModelLog(next.logs.length ? next.logs : ["Downloading…"]);
+          setModelMissing(next.missing_count);
+          if (next.status === "done") {
+            void api.getHealth().then(setHealth).catch(() => undefined);
+          }
+        })
+        .catch((err: Error) => setError(err.message));
+    }, 320);
+    return () => window.clearInterval(timer);
+  }, [modelTask]);
+
+  useEffect(() => {
+    if (logBox.current) logBox.current.scrollTop = logBox.current.scrollHeight;
+  }, [modelLog]);
 
   const imagesById = useMemo(() => {
     const map = new Map<string, JobImage>();
@@ -87,6 +135,29 @@ export default function App() {
     if (created) await run(api.startCluster(created.id, settings));
   }
 
+  async function onProbeShare() {
+    if (!share.host.trim()) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const result = await api.probeShare(share);
+      setModelLog((prev) => [
+        ...prev,
+        `Share probe ${result.location}: ${result.images} image(s). Credentials were not stored.`,
+      ]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onUseShare() {
+    if (!share.host.trim()) return;
+    const created = await run(api.jobFromShare(share));
+    if (created) await run(api.startCluster(created.id, settings));
+  }
+
   async function onDownloadZip() {
     if (!job) return;
     setBusy(true);
@@ -103,6 +174,62 @@ export default function App() {
   async function onRecluster() {
     if (!job) return;
     await run(api.startCluster(job.id, settings));
+  }
+
+  async function onVerifyModels() {
+    setBusy(true);
+    setError(null);
+    try {
+      const status = await api.getModelStatus();
+      const lines = [
+        `Verify · cache ${status.models_dir}`,
+        ...status.yunet.map((spec) => `  YuNet ${spec.id}: ${spec.ready ? "ready" : "MISSING"}  (${spec.label})`),
+        ...status.sface.map((spec) => `  SFace ${spec.id}: ${spec.ready ? "ready" : "MISSING"}  (${spec.label})`),
+      ];
+      if (status.missing_count === 0) {
+        lines.push("All six opencv_zoo variants are present. Download stays inactive.");
+      } else {
+        lines.push(`${status.missing_count} missing — Download is now active (fetches only missing files).`);
+      }
+      setModelLog(lines);
+      setModelMissing(status.missing_count);
+      setHealth((prev) =>
+        prev
+          ? {
+              ...prev,
+              models_ready: status.ready,
+              models_dir: status.models_dir,
+              models: {
+                models_dir: status.models_dir,
+                yunet: status.yunet,
+                sface: status.sface,
+                default_yunet: status.default_yunet,
+                default_sface: status.default_sface,
+              },
+            }
+          : prev,
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+      setModelLog((prev) => [...prev, `Verify failed: ${err instanceof Error ? err.message : String(err)}`]);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onDownloadModels() {
+    if (modelMissing === null || modelMissing <= 0) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const task = await api.startModelDownload(settings);
+      setModelTask(task);
+      setModelLog(task.logs.length ? task.logs : ["Starting download of missing models…"]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
   }
 
   function toggleCluster(id: string) {
@@ -124,6 +251,7 @@ export default function App() {
   }
 
   const clustering = job?.status === "clustering";
+  const downloadingModels = modelTask?.status === "running";
   const anyIncluded = Boolean(job?.clusters.some((c) => c.included));
   const progress = job?.progress;
   const pct =
@@ -132,17 +260,20 @@ export default function App() {
       : clustering
         ? 15
         : 0;
+  const downloadEnabled = modelMissing !== null && modelMissing > 0 && !downloadingModels && !busy;
 
   return (
     <div className="page">
+      <div className="aurora" aria-hidden="true" />
       <header className="top">
         <div>
-          <p className="eyebrow">LoRA dataset prep</p>
+          <p className="eyebrow">Local LoRA dataset prep</p>
           <h1>CloneBins</h1>
+          <p className="tagline">Cluster faces &amp; looks into identity bins — offline, on this machine.</p>
         </div>
         <p className="privacy">
-          Processing is <strong>local</strong> — this machine / self-hosted API. No cloud account,
-          no upload to a vendor.
+          Processing is <strong>local</strong>. No cloud account, no vendor upload, no training. Share passwords never
+          leave this API host and are not logged.
         </p>
       </header>
 
@@ -150,14 +281,16 @@ export default function App() {
         <p className="health">
           API v{health.version}
           {health.models_ready
-            ? " · face models ready (baked-in or cached ONNX)"
-            : " · appearance fallback (YuNet/SFace not in this container yet)"}
+            ? " · face models ready"
+            : " · appearance fallback until YuNet/SFace are downloaded"}
         </p>
       )}
 
       <section className="layout">
-        <aside className="panel">
-          <h2>1. Images</h2>
+        <aside className="panel stack">
+          <h2>
+            <span className="step">01</span> Images
+          </h2>
           <label className="drop">
             <input
               type="file"
@@ -166,7 +299,10 @@ export default function App() {
               disabled={busy || clustering}
               onChange={(e) => void onFiles(e.target.files)}
             />
-            <span>Drop jpg / png / webp or click to upload</span>
+            <span>
+              Drop jpg / png / webp
+              <em>or click to upload</em>
+            </span>
           </label>
           <div className="path-row">
             <input
@@ -177,7 +313,7 @@ export default function App() {
               disabled={busy || clustering}
             />
             {desktop && (
-              <button type="button" className="secondary-inline" disabled={busy || clustering} onClick={() => void onBrowseFolder()}>
+              <button type="button" className="ghost" disabled={busy || clustering} onClick={() => void onBrowseFolder()}>
                 Browse
               </button>
             )}
@@ -186,7 +322,115 @@ export default function App() {
             </button>
           </div>
 
-          <h2>2. Settings</h2>
+          <h3>Network share</h3>
+          <p className="hint">
+            SMB, SFTP, or FTP. Files are copied into a local cache, then clustered with the same pipeline. Credentials
+            stay on this host.
+          </p>
+          <label className="field">
+            Protocol
+            <select
+              value={share.protocol}
+              onChange={(e) => setShare({ ...share, protocol: e.target.value as ShareProtocol })}
+              disabled={busy || clustering}
+            >
+              <option value="sftp">SFTP</option>
+              <option value="smb">SMB</option>
+              <option value="ftp">FTP</option>
+            </select>
+          </label>
+          <div className="pair">
+            <label className="field">
+              Host
+              <input
+                value={share.host}
+                onChange={(e) => setShare({ ...share, host: e.target.value })}
+                placeholder="nas.local"
+                disabled={busy || clustering}
+                autoComplete="off"
+              />
+            </label>
+            <label className="field">
+              Port
+              <input
+                value={share.port}
+                onChange={(e) => setShare({ ...share, port: e.target.value })}
+                placeholder={share.protocol === "smb" ? "445" : share.protocol === "ftp" ? "21" : "22"}
+                disabled={busy || clustering}
+                autoComplete="off"
+              />
+            </label>
+          </div>
+          <label className="field">
+            Path {share.protocol === "smb" ? "(Share/folder)" : "(remote directory)"}
+            <input
+              value={share.path}
+              onChange={(e) => setShare({ ...share, path: e.target.value })}
+              placeholder={share.protocol === "smb" ? "Photos/gens" : "/data/gens"}
+              disabled={busy || clustering}
+              autoComplete="off"
+            />
+          </label>
+          <label className="field">
+            Username
+            <input
+              value={share.username}
+              onChange={(e) => setShare({ ...share, username: e.target.value })}
+              disabled={busy || clustering}
+              autoComplete="username"
+            />
+          </label>
+          <label className="field">
+            Password
+            <input
+              type="password"
+              value={share.password}
+              onChange={(e) => setShare({ ...share, password: e.target.value })}
+              disabled={busy || clustering}
+              autoComplete="current-password"
+            />
+          </label>
+          {share.protocol === "sftp" && (
+            <label className="field">
+              Private key (PEM or path)
+              <textarea
+                rows={3}
+                value={share.private_key}
+                onChange={(e) => setShare({ ...share, private_key: e.target.value })}
+                disabled={busy || clustering}
+                placeholder="-----BEGIN OPENSSH PRIVATE KEY-----"
+                autoComplete="off"
+              />
+            </label>
+          )}
+          <div className="btn-row">
+            <button type="button" className="ghost" disabled={busy || clustering || !share.host.trim()} onClick={() => void onProbeShare()}>
+              Probe share
+            </button>
+            <button type="button" disabled={busy || clustering || !share.host.trim()} onClick={() => void onUseShare()}>
+              Cache &amp; cluster
+            </button>
+          </div>
+
+          <h2>
+            <span className="step">02</span> Face models
+          </h2>
+          <p className="hint">Verify the local ONNX cache, then download only what is missing.</p>
+          <div className="btn-row">
+            <button type="button" className="ghost" disabled={busy || clustering || downloadingModels} onClick={() => void onVerifyModels()}>
+              Verify
+            </button>
+            <button type="button" disabled={!downloadEnabled || clustering} onClick={() => void onDownloadModels()}>
+              Download missing
+            </button>
+          </div>
+          <pre className="logbox" ref={logBox} role="log" aria-live="polite">
+            {modelLog.join("\n")}
+          </pre>
+
+          <h2>
+            <span className="step">03</span> Settings
+          </h2>
           <label className="field">
             Mode
             <select
@@ -275,14 +519,6 @@ export default function App() {
             />
             Keep original filenames in the zip
           </label>
-          <label className="check">
-            <input
-              type="checkbox"
-              checked={settings.download_models}
-              onChange={(e) => setSettings({ ...settings, download_models: e.target.checked })}
-            />
-            Download face models if missing
-          </label>
           <button type="button" className="secondary" disabled={!job || busy || clustering} onClick={() => void onRecluster()}>
             Re-cluster with these settings
           </button>
@@ -290,7 +526,9 @@ export default function App() {
 
         <main className="panel results">
           <div className="results-head">
-            <h2>3. Bins</h2>
+            <h2>
+              <span className="step">04</span> Bins
+            </h2>
             <div className="actions">
               <button
                 type="button"
@@ -324,7 +562,7 @@ export default function App() {
               </button>
               <button
                 type="button"
-                className="secondary-inline"
+                className="ghost"
                 disabled={!job || clustering || job.clusters.length === 0}
                 onClick={() => job && void run(api.setIncludedAll(job.id, true))}
               >
@@ -332,7 +570,7 @@ export default function App() {
               </button>
               <button
                 type="button"
-                className="secondary-inline"
+                className="ghost"
                 disabled={!job || clustering || job.clusters.length === 0}
                 onClick={() => job && void run(api.setIncludedAll(job.id, false))}
               >
@@ -376,7 +614,7 @@ export default function App() {
 
           {job && (
             <p className="meta">
-              Job {job.id} · {job.status} · scanned {job.scanned}
+              Job {job.id} · {job.status} · {job.source} · scanned {job.scanned}
               {job.backend_name ? ` · ${job.backend_name}` : ""}
               {skipped.length ? ` · skipped ${skipped.length}` : ""}
               {unmatched.length ? ` · unmatched ${unmatched.length}` : ""}

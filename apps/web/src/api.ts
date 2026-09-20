@@ -1,4 +1,11 @@
-import type { ClusterSettings, Health, Job } from "./types";
+import type {
+  ClusterSettings,
+  Health,
+  Job,
+  ModelDownloadTask,
+  ModelStatus,
+  ShareRequest,
+} from "./types";
 
 function isTauriRuntime(): boolean {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
@@ -150,4 +157,59 @@ export async function downloadExportZip(jobId: string): Promise<void> {
     return;
   }
   window.location.assign(exportUrl(jobId));
+}
+
+function sharePayload(share: ShareRequest): Record<string, unknown> {
+  const port = share.port.trim() ? Number(share.port) : undefined;
+  return {
+    protocol: share.protocol,
+    host: share.host.trim(),
+    path: share.path.trim(),
+    username: share.username.trim(),
+    password: share.password || null,
+    private_key: share.private_key.trim() || null,
+    port: Number.isFinite(port) ? port : null,
+  };
+}
+
+export async function getModelStatus(): Promise<ModelStatus> {
+  return parse<ModelStatus>(await fetch(apiUrl("/api/models/status")));
+}
+
+export async function startModelDownload(settings: ClusterSettings): Promise<ModelDownloadTask> {
+  return parse<ModelDownloadTask>(
+    await fetch(apiUrl("/api/models/download"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        yunet: settings.yunet,
+        sface: settings.sface,
+        all_variants: true,
+      }),
+    }),
+  );
+}
+
+export async function getModelDownload(id: string): Promise<ModelDownloadTask> {
+  return parse<ModelDownloadTask>(await fetch(apiUrl(`/api/models/download/${id}`)));
+}
+
+export async function probeShare(share: ShareRequest): Promise<{ ok: boolean; location: string; images: number }> {
+  return parse(
+    await fetch(apiUrl("/api/shares/probe"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(sharePayload(share)),
+    }),
+  );
+}
+
+export async function jobFromShare(share: ShareRequest): Promise<Job> {
+  return parse<Job>(
+    await fetch(apiUrl("/api/jobs/from-share"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(sharePayload(share)),
+    }),
+  );
 }

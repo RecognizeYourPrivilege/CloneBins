@@ -32,6 +32,88 @@ def test_health():
     assert body["privacy"] == "local"
 
 
+def test_models_status_and_download_skips_present(tmp_path, monkeypatch):
+    monkeypatch.setenv("CLONEBINS_MODELS_DIR", str(tmp_path))
+    status = client.get("/api/models/status")
+    assert status.status_code == 200, status.text
+    body = status.json()
+    assert body["missing_count"] == 6
+    assert {item["filename"] for item in body["missing"]}
+
+    calls: list[str] = []
+
+    def fake_download(urls, dest, min_bytes):
+        calls.append(dest.name)
+        dest.write_bytes(b"x" * (min_bytes + 8))
+
+    monkeypatch.setattr("clonebins_core.models._download_first_ok", fake_download)
+    started = client.post("/api/models/download", json={"all_variants": True})
+    assert started.status_code == 200, started.text
+    task_id = started.json()["id"]
+    deadline = time.time() + 8
+    last = started.json()
+    while time.time() < deadline:
+        last = client.get(f"/api/models/download/{task_id}").json()
+        if last["status"] in {"done", "error"}:
+            break
+        time.sleep(0.05)
+    assert last["status"] == "done", last
+    assert last["missing_count"] == 0
+    assert len(calls) == 6
+    assert all("http" not in line.lower() or "password" not in line.lower() for line in last["logs"])
+
+    calls.clear()
+    again = client.post("/api/models/download", json={"all_variants": True})
+    task_id = again.json()["id"]
+    deadline = time.time() + 8
+    last = again.json()
+    while time.time() < deadline:
+        last = client.get(f"/api/models/download/{task_id}").json()
+        if last["status"] in {"done", "error"}:
+            break
+        time.sleep(0.05)
+    assert last["status"] == "done"
+    assert calls == []
+    assert any("already present" in line.lower() or "nothing to download" in line.lower() for line in last["logs"])
+
+
+def test_from_share_then_cluster(tmp_path, monkeypatch):
+    write_identity_set(tmp_path / "remote")
+
+    def fake_fetch(spec, dest, log=None):
+        assert spec.password == "secret-pass"
+        dest = Path(dest)
+        for path in (tmp_path / "remote").glob("*.png"):
+            (dest / path.name).write_bytes(path.read_bytes())
+            if log:
+                log(f"Cached {path.name}")
+        spec.clear_secrets()
+        return 6
+
+    monkeypatch.setattr("clonebins_api.jobs.fetch_share", fake_fetch)
+    created = client.post(
+        "/api/jobs/from-share",
+        json={
+            "protocol": "smb",
+            "host": "nas.local",
+            "path": "Photos/gens",
+            "username": "alice",
+            "password": "secret-pass",
+        },
+    )
+    assert created.status_code == 200, created.text
+    job = created.json()
+    dumped = created.text
+    assert "secret-pass" not in dumped
+    assert job["source"] == "share"
+    job_id = job["id"]
+    client.post(f"/api/jobs/{job_id}/cluster", json={"mode": "face+body", "download_models": False, "min_images": 2})
+    finished = _wait(job_id)
+    assert finished["status"] == "done"
+    assert len(finished["clusters"]) == 2
+    assert "secret-pass" not in str(finished)
+
+
 def test_upload_cluster_rename_zip(tmp_path: Path):
     write_identity_set(tmp_path)
     files = []

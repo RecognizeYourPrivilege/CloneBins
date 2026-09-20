@@ -13,12 +13,12 @@ from pathlib import Path
 
 from PIL import Image
 
+from clonebins_api.schemas import ClusterSettings
+from clonebins_api.shares import ShareError, ShareSpec, fetch_share
 from clonebins_core.export import safe_folder_name
 from clonebins_core.pipeline import PipelineConfig, run_pipeline
 from clonebins_core.scan import IMAGE_EXTENSIONS
 from clonebins_core.types import ClusterMode, Naming, Placement
-
-from clonebins_api.schemas import ClusterSettings
 
 JOBS_ROOT = Path(tempfile.gettempdir()) / "clonebins-jobs"
 MAX_UPLOAD_FILES = 500
@@ -197,6 +197,26 @@ class JobStore:
         if not path.is_dir():
             raise JobError(f"Not a directory: {path}")
         job = self._new_job(source="path", input_dir=path)
+        return job
+
+    def create_from_share(self, spec: ShareSpec) -> Job:
+        job = self._new_job(source="share")
+        logs: list[str] = []
+
+        def log(message: str) -> None:
+            logs.append(message)
+
+        try:
+            fetch_share(spec, job.input_dir, log=log)
+        except ShareError:
+            shutil.rmtree(job.root, ignore_errors=True)
+            with self._lock:
+                self._jobs.pop(job.id, None)
+            raise
+        finally:
+            spec.clear_secrets()
+        with job.lock:
+            job.notes = list(logs)
         return job
 
     def get(self, job_id: str) -> Job:

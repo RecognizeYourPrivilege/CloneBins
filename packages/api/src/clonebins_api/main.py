@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import os
+import threading
+import uuid
 from pathlib import Path
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
@@ -18,10 +20,19 @@ from clonebins_api.schemas import (
     ExtractRequest,
     IncludeRequest,
     MergeRequest,
+    ModelDownloadRequest,
     PathRequest,
     RenameRequest,
+    ShareRequest,
 )
-from clonebins_core.models import catalog_status, default_models_dir, models_present
+from clonebins_api.shares import ShareError, ShareSpec, probe_share
+from clonebins_core.models import (
+    catalog_status,
+    default_models_dir,
+    download_missing_face_models,
+    missing_model_specs,
+    models_present,
+)
 
 app = FastAPI(
     title="CloneBins API",
@@ -46,9 +57,59 @@ _IMAGE_TYPES = {
 }
 
 
+class _ModelTask:
+    def __init__(self) -> None:
+        self.id = uuid.uuid4().hex[:12]
+        self.status = "running"
+        self.logs: list[str] = []
+        self.error: str | None = None
+        self.lock = threading.Lock()
+
+    def log(self, message: str) -> None:
+        with self.lock:
+            self.logs.append(message)
+
+    def snapshot(self) -> dict:
+        with self.lock:
+            directory = default_models_dir()
+            catalog = catalog_status(directory)
+            missing = missing_model_specs(directory)
+            return {
+                "id": self.id,
+                "status": self.status,
+                "logs": list(self.logs),
+                "error": self.error,
+                "models_dir": str(directory),
+                "missing": missing,
+                "missing_count": len(missing),
+                "catalog": catalog,
+            }
+
+
+_model_tasks: dict[str, _ModelTask] = {}
+_model_tasks_lock = threading.Lock()
+
+
+def _models_payload(models_dir: Path | None = None) -> dict:
+    directory = models_dir or default_models_dir()
+    catalog = catalog_status(directory)
+    missing = missing_model_specs(directory)
+    return {
+        **catalog,
+        "missing": missing,
+        "missing_count": len(missing),
+        "ready": models_present(directory),
+    }
+
+
 @app.exception_handler(JobError)
 def _job_error(_request, exc: JobError) -> JSONResponse:
     return JSONResponse({"detail": str(exc)}, status_code=exc.status_code)
+
+
+@app.exception_handler(ShareError)
+def _share_error(_request, exc: ShareError) -> JSONResponse:
+    return JSONResponse({"detail": str(exc)}, status_code=400)
 
 
 @app.get("/api/health")
@@ -70,6 +131,67 @@ def models() -> dict:
     return catalog_status()
 
 
+@app.get("/api/models/status")
+def models_status() -> dict:
+    """Verify which YuNet / SFace ONNX files are present vs missing."""
+    return _models_payload()
+
+
+@app.post("/api/models/download")
+def models_download(body: ModelDownloadRequest) -> dict:
+    """Download only missing face models. Poll GET /api/models/download/{id} for logs."""
+    task = _ModelTask()
+    with _model_tasks_lock:
+        _model_tasks[task.id] = task
+    thread = threading.Thread(target=_run_model_download, args=(task, body), daemon=True)
+    thread.start()
+    return task.snapshot()
+
+
+@app.get("/api/models/download/{task_id}")
+def models_download_status(task_id: str) -> dict:
+    with _model_tasks_lock:
+        task = _model_tasks.get(task_id)
+    if task is None:
+        raise HTTPException(status_code=404, detail="Download task not found")
+    return task.snapshot()
+
+
+def _run_model_download(task: _ModelTask, body: ModelDownloadRequest) -> None:
+    directory = default_models_dir()
+    missing = missing_model_specs(directory)
+    if not missing:
+        task.log("Verify: every catalogued YuNet / SFace file is already present.")
+        task.log("Nothing to download.")
+        with task.lock:
+            task.status = "done"
+        return
+    task.log(f"Missing {len(missing)} file(s): " + ", ".join(item["filename"] for item in missing))
+    try:
+        download_missing_face_models(
+            models_dir=directory,
+            log=task.log,
+            all_variants=body.all_variants,
+            yunet_id=body.yunet,
+            sface_id=body.sface,
+        )
+        leftover = missing_model_specs(directory)
+        if leftover:
+            task.log("Still missing: " + ", ".join(item["filename"] for item in leftover))
+            with task.lock:
+                task.status = "error"
+                task.error = "Some models could not be downloaded"
+        else:
+            task.log("All requested models are on disk.")
+            with task.lock:
+                task.status = "done"
+    except Exception as exc:
+        task.log(f"Error: {exc}")
+        with task.lock:
+            task.status = "error"
+            task.error = str(exc)
+
+
 @app.post("/api/jobs/upload")
 async def upload(files: list[UploadFile] = File(...)) -> dict:
     payload: list[tuple[str, bytes]] = []
@@ -84,6 +206,37 @@ async def upload(files: list[UploadFile] = File(...)) -> dict:
 def from_path(body: PathRequest) -> dict:
     job = store.create_from_path(body.path)
     return job.to_dict()
+
+
+@app.post("/api/shares/probe")
+def share_probe(body: ShareRequest) -> dict:
+    spec = _share_spec(body)
+    try:
+        return probe_share(spec)
+    finally:
+        spec.clear_secrets()
+
+
+@app.post("/api/jobs/from-share")
+def from_share(body: ShareRequest) -> dict:
+    spec = _share_spec(body)
+    try:
+        job = store.create_from_share(spec)
+    finally:
+        spec.clear_secrets()
+    return job.to_dict()
+
+
+def _share_spec(body: ShareRequest) -> ShareSpec:
+    return ShareSpec(
+        protocol=body.protocol,
+        host=body.host,
+        path=body.path,
+        username=body.username,
+        password=body.password,
+        private_key=body.private_key,
+        port=body.port,
+    )
 
 
 @app.get("/api/jobs/{job_id}")
