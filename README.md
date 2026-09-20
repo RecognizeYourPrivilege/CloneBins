@@ -329,16 +329,17 @@ GitHub Actions publishes Linux, macOS, and Windows installers on
 
 | File | Platform |
 | --- | --- |
-| `CloneBins-0.1.1-macos-arm64.dmg` | Apple Silicon |
-| `CloneBins-0.1.1-macos-x64.dmg` | Intel Mac |
+| `CloneBins-0.1.1-macos-arm64.dmg` | Apple Silicon (unsigned / ad-hoc signed) |
+| `CloneBins-0.1.1-macos-x64.dmg` | Intel Mac (unsigned / ad-hoc signed) |
 | `CloneBins-0.1.1-ubuntu-amd64.deb` | Ubuntu / Debian |
 | `CloneBins-0.1.1-linux-x64.AppImage` | Generic glibc Linux |
 | `CloneBins-0.1.1-archlinux-x86_64.pkg.tar.zst` | Arch |
 | `CloneBins-0.1.1-windows-x64-setup.exe` | Windows 10/11 NSIS (current user) |
 | `CloneBins-0.1.1-windows-x64.zip` | Windows portable (`CloneBins.exe` + `clonebins-api.exe`) |
 
-macOS DMGs are not notarized — see
-[apps/desktop/README.md](apps/desktop/README.md). The Windows installer is
+macOS DMGs are **unsigned / ad-hoc signed**, not notarized — see
+[apps/desktop/README.md](apps/desktop/README.md) (optional Apple secrets).
+The Windows installer is
 unsigned; SmartScreen may warn (More info → Run anyway). Keep
 `clonebins-api.exe` next to `CloneBins.exe` if you use the zip.
 

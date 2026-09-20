@@ -18,7 +18,14 @@ case "$KIND" in
       --hidden-import uvicorn.protocols.http.auto
       --hidden-import uvicorn.protocols.websockets.auto
       --hidden-import uvicorn.lifespan.on
+      --hidden-import clonebins_api.shares
+      --hidden-import paramiko
+      --hidden-import smbclient
+      --hidden-import smbprotocol
+      --hidden-import cryptography
       --collect-all clonebins_api
+      --collect-all paramiko
+      --collect-all smbprotocol
     )
     ;;
   cli)
@@ -40,6 +47,11 @@ WORKDIR="$(mktemp -d)"
 trap 'rm -rf "$WORKDIR"' EXIT
 mkdir -p "$ROOT/dist"
 
+target_args=()
+if [[ -n "${TARGET_ARCH:-}" ]]; then
+  target_args+=(--target-arch "$TARGET_ARCH")
+fi
+
 "$PYTHON" -m PyInstaller \
   --noconfirm --clean --onefile \
   --name "$NAME" \
@@ -54,6 +66,7 @@ mkdir -p "$ROOT/dist"
   --exclude-module sklearn.datasets \
   --exclude-module sklearn.tests \
   --exclude-module scipy.tests \
+  "${target_args[@]}" \
   "${extra[@]}" \
   "$ENTRY"
 
@@ -68,6 +81,23 @@ else
   exit 1
 fi
 chmod +x "$OUT" 2>/dev/null || true
-file "$OUT" || true
+info="$(file "$OUT" 2>/dev/null || true)"
+echo "$info"
 ls -lh "$OUT"
+if [[ -n "${TARGET_ARCH:-}" && -n "$info" ]]; then
+  case "$TARGET_ARCH" in
+    x86_64)
+      echo "$info" | grep -Eq 'x86_64|i386' || {
+        echo "expected $TARGET_ARCH binary: $info" >&2
+        exit 1
+      }
+      ;;
+    arm64)
+      echo "$info" | grep -Eq 'arm64|aarch64' || {
+        echo "expected $TARGET_ARCH binary: $info" >&2
+        exit 1
+      }
+      ;;
+  esac
+fi
 echo "Wrote $OUT"
