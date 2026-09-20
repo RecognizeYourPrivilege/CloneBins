@@ -11,7 +11,7 @@ export type ClusterSettings = {
   subject_prefix: string;
   download_models: boolean;
   keep_names: boolean;
-  yunet: "2023mar" | "2023mar_int8" | "2023mar_int8bq";
+  yunet: "2023mar" | "2023mar_int8" | "2023mar_int8bq" | "2026may";
   sface: "2021dec" | "2021dec_int8" | "2021dec_int8bq";
 };
 
@@ -87,17 +87,25 @@ export type ModelSpec = {
   ready: boolean;
   bytes: number;
   family?: string;
+  path?: string;
+  source?: string;
 };
 
 export type ModelStatus = {
   models_dir: string;
+  home?: string;
   yunet: ModelSpec[];
   sface: ModelSpec[];
   default_yunet: string;
   default_sface: string;
+  expected?: number;
+  yunet_count?: number;
+  sface_count?: number;
   missing: ModelSpec[];
   missing_count: number;
   ready: boolean;
+  catalog_ready?: boolean;
+  all_ready?: boolean;
 };
 
 export type ModelDownloadTask = {

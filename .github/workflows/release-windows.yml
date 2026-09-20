@@ -12,9 +12,9 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Release tag to create or reuse (e.g. v0.1.1)"
+        description: "Release tag to create or reuse (e.g. v0.1.2)"
         required: true
-        default: "v0.1.1"
+        default: "v0.1.2"
 
 permissions:
   contents: write
@@ -24,8 +24,8 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  CLONEBINS_VERSION: "0.1.1"
-  RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || (startsWith(github.ref, 'refs/tags/') && github.ref_name || 'v0.1.1') }}
+  CLONEBINS_VERSION: "0.1.2"
+  RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || (startsWith(github.ref, 'refs/tags/') && github.ref_name || 'v0.1.2') }}
 
 jobs:
   windows:
@@ -117,11 +117,11 @@ jobs:
             --desktop "$DESKTOP" \
             --api "$API" \
             "${EXTRAS[@]+"${EXTRAS[@]}"}" \
-            --out dist/release/CloneBins-0.1.1-windows-x64.zip
+            --out dist/release/CloneBins-0.1.2-windows-x64.zip
           NSIS=""
           for candidate in \
-            apps/desktop/src-tauri/target/release/bundle/nsis/CloneBins_0.1.1_x64-setup.exe \
-            apps/desktop/src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/CloneBins_0.1.1_x64-setup.exe
+            apps/desktop/src-tauri/target/release/bundle/nsis/CloneBins_0.1.2_x64-setup.exe \
+            apps/desktop/src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/CloneBins_0.1.2_x64-setup.exe
           do
             if [[ -f "$candidate" ]]; then
               NSIS="$candidate"
@@ -137,13 +137,13 @@ jobs:
           if [[ -n "${NSIS:-}" ]]; then
             apps/desktop/scripts/package-windows.sh nsis \
               --installer "$NSIS" \
-              --out dist/release/CloneBins-0.1.1-windows-x64-setup.exe
+              --out dist/release/CloneBins-0.1.2-windows-x64-setup.exe
           else
             echo "NSIS installer missing; portable zip still published" >&2
             find apps/desktop/src-tauri/target -maxdepth 6 -type d -print >&2 || true
           fi
           ls -lh dist/release
-          python -c 'import zipfile; z=zipfile.ZipFile("dist/release/CloneBins-0.1.1-windows-x64.zip"); names=z.namelist(); print("\n".join(names)); assert "CloneBins/CloneBins.exe" in names; assert "CloneBins/clonebins-api.exe" in names'
+          python -c 'import zipfile; z=zipfile.ZipFile("dist/release/CloneBins-0.1.2-windows-x64.zip"); names=z.namelist(); print("\n".join(names)); assert "CloneBins/CloneBins.exe" in names; assert "CloneBins/clonebins-api.exe" in names'
 
       - uses: actions/upload-artifact@v4
         with:
@@ -174,6 +174,6 @@ jobs:
           prerelease: false
           fail_on_unmatched_files: false
           files: dist/release/*
-          body_path: .github/release-notes-v0.1.1.md
+          body_path: .github/release-notes-v0.1.2.md
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

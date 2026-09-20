@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.2 — 2026-09-21
+
+- **macOS Verify / Download:** the desktop sidecar and API now resolve the model cache as `Path.home() / ".cache" / "clonebins" / "models"` (or `CLONEBINS_MODELS_DIR`). Empty or literal `~` HOME values from Finder-launched apps no longer leave an unexpanded path. The Tauri sidecar exports the same `HOME` / `CLONEBINS_MODELS_DIR` as the Mac user running CloneBins.app.
+- **7-file catalog:** Verify checks all four YuNet ONNX files (`2023mar`, `2023mar_int8`, `2023mar_int8bq`, `2026may`) and all three SFace files. Download fetches only missing files from Hugging Face (`opencv/face_detection_yunet`, `opencv/face_recognition_sface`), with opencv_zoo GitHub LFS as fallback (`2026may` is not on HF yet).
+- macOS arm64 + x64 DMGs rebuilt on `macos-latest` / `macos-15-intel` and published on the `v0.1.2` release.
+
 ## 0.1.1 — 2026-09-20
 
 - **Network shares:** connect to SMB, SFTP, or FTP from the web/desktop UI. Images are copied into a local cache and clustered with the existing `from-path` pipeline. Credentials stay on the API host, are never logged, and are cleared after the transfer.

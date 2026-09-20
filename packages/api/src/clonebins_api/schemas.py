@@ -6,7 +6,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-YunNetId = Literal["2023mar", "2023mar_int8", "2023mar_int8bq"]
+YunNetId = Literal["2023mar", "2023mar_int8", "2023mar_int8bq", "2026may"]
 SFaceId = Literal["2021dec", "2021dec_int8", "2021dec_int8bq"]
 
 

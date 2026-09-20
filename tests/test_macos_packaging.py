@@ -45,6 +45,8 @@ def test_freeze_script_collects_share_deps() -> None:
         "--hidden-import clonebins_api.shares",
         "--collect-all paramiko",
         "--collect-all smbprotocol",
+        "--collect-all certifi",
+        "--hidden-import certifi",
         "--target-arch",
     ):
         assert flag in text
@@ -57,3 +59,11 @@ def test_desktop_readme_documents_apple_secrets() -> None:
     assert "APPLE_API_KEY" in text
     assert "macos-15-intel" in text
     assert "unsigned" in text.lower()
+
+
+def test_sidecar_pins_models_dir_to_user_home() -> None:
+    rust = (ROOT / "apps/desktop/src-tauri/src/lib.rs").read_text(encoding="utf-8")
+    assert "fn apply_user_cache_env" in rust
+    assert 'cmd.env("HOME"' in rust
+    assert 'cmd.env(\n            "CLONEBINS_MODELS_DIR"' in rust or "CLONEBINS_MODELS_DIR" in rust
+    assert 'home.join(".cache").join("clonebins").join("models")' in rust

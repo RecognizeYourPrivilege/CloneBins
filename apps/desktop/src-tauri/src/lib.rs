@@ -92,8 +92,9 @@ fn spawn_sidecar() -> Result<Child, String> {
         c
     };
     cmd.env("CLONEBINS_API_HOST", API_HOST)
-        .env("CLONEBINS_API_PORT", API_PORT.to_string())
-        .stdin(Stdio::null())
+        .env("CLONEBINS_API_PORT", API_PORT.to_string());
+    apply_user_cache_env(&mut cmd);
+    cmd.stdin(Stdio::null())
         .stdout(Stdio::inherit())
         .stderr(Stdio::inherit());
     #[cfg(windows)]
@@ -109,6 +110,27 @@ fn spawn_sidecar() -> Result<Child, String> {
              (or set CLONEBINS_PYTHON to a Python that has those packages)."
         )
     })
+}
+
+/// Point the Python sidecar at the same `~` the user's shell expands.
+/// Finder-launched macOS apps (and frozen PyInstaller bins) sometimes inherit
+/// an empty or unexpanded HOME; without this, models land outside
+/// `~/.cache/clonebins/models`.
+fn apply_user_cache_env(cmd: &mut Command) {
+    let home = std::env::var_os("HOME")
+        .filter(|value| !value.is_empty() && value != "~")
+        .map(PathBuf::from)
+        .or_else(|| std::env::var_os("USERPROFILE").map(PathBuf::from));
+    let Some(home) = home else {
+        return;
+    };
+    cmd.env("HOME", &home);
+    if std::env::var_os("CLONEBINS_MODELS_DIR").is_none() {
+        cmd.env(
+            "CLONEBINS_MODELS_DIR",
+            home.join(".cache").join("clonebins").join("models"),
+        );
+    }
 }
 
 /// Sidecar next to the executable (`CloneBins.app/Contents/MacOS/clonebins-api`,
