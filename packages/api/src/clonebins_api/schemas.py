@@ -45,6 +45,22 @@ class IncludeRequest(BaseModel):
     included: bool
 
 
+class ShareRequest(BaseModel):
+    protocol: Literal["smb", "sftp", "ftp"]
+    host: str
+    path: str = ""
+    username: str = ""
+    password: str | None = None
+    private_key: str | None = None
+    port: int | None = Field(default=None, ge=1, le=65535)
+
+
+class ModelDownloadRequest(BaseModel):
+    yunet: YunNetId = "2023mar"
+    sface: SFaceId = "2021dec"
+    all_variants: bool = True
+
+
 class ImageOut(BaseModel):
     id: str
     filename: str

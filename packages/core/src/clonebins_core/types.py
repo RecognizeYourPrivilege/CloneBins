@@ -40,6 +40,8 @@ class ImageRecord:
     path: Path
     relative_name: str
     embedding: np.ndarray | None = None
+    face_embedding: np.ndarray | None = None
+    body_embedding: np.ndarray | None = None
     faces_found: int = 0
     used_face: bool = False
     used_body: bool = False

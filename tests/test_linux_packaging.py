@@ -28,8 +28,8 @@ def test_package_linux_deb_and_arch(tmp_path: Path) -> None:
     _dummy_bin(desktop)
     _dummy_bin(api)
 
-    deb = tmp_path / "CloneBins-0.1.0-ubuntu-amd64.deb"
-    arch = tmp_path / "CloneBins-0.1.0-archlinux-x86_64.pkg.tar.zst"
+    deb = tmp_path / "CloneBins-0.1.1-ubuntu-amd64.deb"
+    arch = tmp_path / "CloneBins-0.1.1-archlinux-x86_64.pkg.tar.zst"
 
     _run(
         [

@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from clonebins_core.cluster import DEFAULT_THRESHOLD, cluster_embeddings
-from clonebins_core.embed import stack_embeddings
+from clonebins_core.embed import build_embedding_matrix
 from clonebins_core.embed.factory import HybridEmbedder, build_embedder
 from clonebins_core.export import export_plan, subject_name
 from clonebins_core.io import load_image_bgr
@@ -84,7 +84,13 @@ def run_pipeline(config: PipelineConfig, progress: ProgressReporter | None = Non
         record.faces_found = result.faces_found
         record.used_face = result.used_face
         record.used_body = result.used_body
-        if result.embedding is None:
+        record.face_embedding = result.face_embedding
+        record.body_embedding = result.body_embedding
+        if (
+            result.embedding is None
+            and result.face_embedding is None
+            and result.body_embedding is None
+        ):
             record.unmatched = True
             record.unmatched_reason = result.note or "no embedding"
         else:
@@ -93,7 +99,11 @@ def run_pipeline(config: PipelineConfig, progress: ProgressReporter | None = Non
         reporter.advance("embed", message=rel)
     reporter.finish("embed")
 
-    usable = [r for r in records if r.embedding is not None]
+    usable = [
+        r
+        for r in records
+        if r.embedding is not None or r.face_embedding is not None or r.body_embedding is not None
+    ]
     skipped = [r for r in records if r.skipped]
     unmatched = [r for r in records if r.unmatched]
 
@@ -108,6 +118,8 @@ def run_pipeline(config: PipelineConfig, progress: ProgressReporter | None = Non
         backend_name=embedder.name,
         notes=notes,
         scanned=len(paths),
+        declared_face_dim=getattr(embedder, "face_dim", None),
+        declared_body_dim=getattr(embedder, "body_dim", None),
     )
     reporter.log(
         f"Clusters: {len(plan.clusters)} exportable, "
@@ -142,6 +154,8 @@ def _build_plan(
     backend_name: str,
     notes: list[str],
     scanned: int,
+    declared_face_dim: int | None = None,
+    declared_body_dim: int | None = None,
 ) -> ClusterPlan:
     plan = ClusterPlan(
         skipped=skipped,
@@ -153,7 +167,11 @@ def _build_plan(
     if not usable:
         return plan
 
-    matrix = stack_embeddings([r.embedding for r in usable if r.embedding is not None])
+    matrix = build_embedding_matrix(
+        usable,
+        declared_face_dim=declared_face_dim,
+        declared_body_dim=declared_body_dim,
+    )
     labels = cluster_embeddings(matrix, threshold=threshold)
 
     grouped: dict[int, list[ImageRecord]] = {}
