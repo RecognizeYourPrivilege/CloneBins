@@ -48,7 +48,6 @@ export default function App() {
     "Face models stay on this machine. Download is always available — Verify is optional status.",
     "CLI fallback: clonebins models download --force",
   ]);
-  const [modelMissing, setModelMissing] = useState<number | null>(null);
   const [modelTask, setModelTask] = useState<ModelDownloadTask | null>(null);
   const [modelsDir, setModelsDir] = useState("~/.cache/clonebins/models");
   const logBox = useRef<HTMLPreElement | null>(null);
@@ -77,7 +76,6 @@ export default function App() {
         .then((next) => {
           setModelTask(next);
           setModelLog(next.logs.length ? next.logs : ["Downloading…"]);
-          setModelMissing(next.missing_count);
           if (next.models_dir) setModelsDir(next.models_dir);
           if (next.status === "done" || next.status === "error") {
             void api.getHealth().then(setHealth).catch(() => undefined);
@@ -209,7 +207,6 @@ export default function App() {
       }
       lines.push("CLI fallback: clonebins models download --force");
       setModelLog(lines);
-      setModelMissing(status.missing_count);
       setModelsDir(status.models_dir);
       setHealth((prev) =>
         prev
