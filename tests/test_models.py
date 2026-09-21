@@ -1,14 +1,23 @@
-"""Face-model catalog (no network)."""
+"""Face-model catalog and download (mock network unless marked live)."""
+
+from __future__ import annotations
+
+import pytest
 
 from clonebins_core.models import (
     ALL_MODELS,
     CATALOG_SIZE,
     DEFAULT_SFACE_ID,
     DEFAULT_YUNET_ID,
+    EXPECTED_FILENAMES,
+    INSTALL_COMMAND,
     SFACE_MODELS,
     YUNET_MODELS,
+    _download_first_ok,
     catalog_status,
+    curl_install_script,
     default_models_dir,
+    download_all_face_models,
     download_missing_face_models,
     missing_model_specs,
     resolve_model_paths,
@@ -43,6 +52,9 @@ def test_catalog_lists_huggingface_urls():
         assert spec.urls[0].startswith("https://huggingface.co/opencv/")
         assert spec.filename in spec.urls[0]
         assert any("huggingface.co" in url for url in spec.urls)
+        assert any("media.githubusercontent.com" in url for url in spec.urls)
+        assert any("github.com/opencv/opencv_zoo/raw/" in url for url in spec.urls)
+        assert any("jsdelivr.net" in url for url in spec.urls)
         assert any("opencv_zoo" in url for url in spec.urls)
 
 
@@ -63,12 +75,28 @@ def test_catalog_status_lists_all_missing(tmp_path):
     assert {item["filename"] for item in missing} == {spec.filename for spec in ALL_MODELS}
 
 
+def test_download_writes_all_seven_filenames(tmp_path, monkeypatch):
+    calls: list[str] = []
+
+    def fake_download(urls, dest, min_bytes, log=None):
+        calls.append(dest.name)
+        dest.write_bytes(b"y" * (min_bytes + 10))
+
+    monkeypatch.setattr("clonebins_core.models._download_first_ok", fake_download)
+    root = download_all_face_models(models_dir=tmp_path)
+    assert root == tmp_path
+    assert calls == list(EXPECTED_FILENAMES)
+    assert {p.name for p in tmp_path.glob("*.onnx")} == set(EXPECTED_FILENAMES)
+    for spec in ALL_MODELS:
+        assert (tmp_path / spec.filename).stat().st_size >= spec.min_bytes
+
+
 def test_download_missing_skips_present(tmp_path, monkeypatch):
     yunet = tmp_path / "face_detection_yunet_2023mar.onnx"
     yunet.write_bytes(b"x" * 60_000)
     calls: list[str] = []
 
-    def fake_download(urls, dest, min_bytes):
+    def fake_download(urls, dest, min_bytes, log=None):
         calls.append(dest.name)
         dest.write_bytes(b"y" * (min_bytes + 10))
 
@@ -80,6 +108,58 @@ def test_download_missing_skips_present(tmp_path, monkeypatch):
     assert len(calls) == 6
     download_missing_face_models(models_dir=tmp_path, all_variants=True)
     assert len(calls) == 6
+
+
+def test_download_force_refetches_present(tmp_path, monkeypatch):
+    for spec in ALL_MODELS:
+        (tmp_path / spec.filename).write_bytes(b"x" * (spec.min_bytes + 8))
+    calls: list[str] = []
+
+    def fake_download(urls, dest, min_bytes, log=None):
+        calls.append(dest.name)
+        dest.write_bytes(b"z" * (min_bytes + 10))
+
+    monkeypatch.setattr("clonebins_core.models._download_first_ok", fake_download)
+    download_missing_face_models(models_dir=tmp_path, all_variants=True, force=True)
+    assert calls == list(EXPECTED_FILENAMES)
+
+
+def test_download_falls_back_to_curl_when_urllib_fails(tmp_path, monkeypatch):
+    dest = tmp_path / "face_detection_yunet_2023mar.onnx"
+    urls = ALL_MODELS[0].urls[:1]
+
+    def boom(url, dest_path, timeout=180):
+        raise OSError("CERTIFICATE_VERIFY_FAILED")
+
+    def fake_curl(url, dest_path, timeout=180):
+        dest_path.write_bytes(b"onnx-bytes" * 8000)
+
+    monkeypatch.setattr("clonebins_core.models._download_url", boom)
+    monkeypatch.setattr("clonebins_core.models._download_url_curl", fake_curl)
+    _download_first_ok(urls, dest, min_bytes=50_000)
+    assert dest.is_file()
+    assert dest.stat().st_size >= 50_000
+
+
+def test_install_command_and_curl_script(tmp_path):
+    assert INSTALL_COMMAND == "clonebins models download --force"
+    script = curl_install_script(tmp_path)
+    assert "mkdir -p" in script
+    for name in EXPECTED_FILENAMES:
+        assert name in script
+    assert "media.githubusercontent.com" in script or "huggingface.co" in script
+
+
+def test_live_smoke_downloads_one_yunet(tmp_path):
+    spec = YUNET_MODELS[0]
+    dest = tmp_path / spec.filename
+    try:
+        _download_first_ok(spec.urls, dest, min_bytes=spec.min_bytes)
+    except Exception as exc:
+        pytest.skip(f"live download unavailable: {exc}")
+    assert dest.is_file()
+    assert dest.stat().st_size >= spec.min_bytes
+    assert dest.read_bytes()[:1] not in {b"<", b"{", b"#"}
 
 
 def test_default_models_dir_uses_home_cache(monkeypatch, tmp_path):

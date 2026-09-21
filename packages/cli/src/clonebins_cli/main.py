@@ -15,6 +15,7 @@ from clonebins_core.cluster import DEFAULT_THRESHOLD
 from clonebins_core.models import (
     DEFAULT_SFACE_ID,
     DEFAULT_YUNET_ID,
+    INSTALL_COMMAND,
     SFACE_BY_ID,
     YUNET_BY_ID,
     catalog_status,
@@ -114,7 +115,7 @@ def version() -> None:
     try:
         console.print(pkg_version("clonebins"))
     except PackageNotFoundError:
-        console.print("0.1.2")
+        console.print("0.1.3")
 
 
 @app.command()
@@ -291,21 +292,31 @@ def models_download(
     ] = None,
     all_variants: Annotated[
         bool,
-        typer.Option("--all", help="Download every YuNet and SFace ONNX variant."),
+        typer.Option(
+            "--all/--defaults-only",
+            help="Download every YuNet and SFace ONNX variant (default: all seven).",
+        ),
+    ] = True,
+    force: Annotated[
+        bool,
+        typer.Option("--force", help="Re-download files even if they already look valid."),
     ] = False,
     yunet: Annotated[str, typer.Option("--yunet")] = DEFAULT_YUNET_ID,
     sface: Annotated[str, typer.Option("--sface")] = DEFAULT_SFACE_ID,
 ) -> None:
-    """Download YuNet + SFace ONNX weights into the local cache (one-time network).
+    """Download all seven YuNet + SFace ONNX weights into ~/.cache/clonebins/models.
 
-    Already-valid files are skipped. ``--all`` fills every missing catalog entry;
-    the default only fetches the selected YuNet + SFace pair.
+    Already-valid files are skipped unless ``--force``. This is the Terminal
+    fallback when the desktop Download button cannot reach the network:
+
+        clonebins models download --force
     """
     try:
         root = download_missing_face_models(
             models_dir=models_dir,
             log=err_console.print,
             all_variants=all_variants,
+            force=force,
             yunet_id=yunet,
             sface_id=sface,
         )
@@ -321,5 +332,6 @@ def models_download(
             return
     except Exception as exc:
         err_console.print(f"[red]{exc}[/red]")
+        err_console.print(f"Fallback: {INSTALL_COMMAND}")
         raise typer.Exit(code=1) from exc
     console.print(f"All variants in {root}")

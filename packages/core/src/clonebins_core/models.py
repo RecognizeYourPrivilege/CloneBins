@@ -19,13 +19,17 @@ from __future__ import annotations
 
 import argparse
 import os
+import shutil
 import ssl
+import subprocess
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
 
 ENV_MODELS_DIR = "CLONEBINS_MODELS_DIR"
+INSTALL_COMMAND = "clonebins models download --force"
+USER_AGENT = "CloneBins/0.1.3 (local dataset clustering)"
 
 HF_YUNET = "https://huggingface.co/opencv/face_detection_yunet/resolve/main"
 HF_SFACE = "https://huggingface.co/opencv/face_recognition_sface/resolve/main"
@@ -33,17 +37,35 @@ GH_YUNET = "https://media.githubusercontent.com/media/opencv/opencv_zoo/main/mod
 GH_SFACE = "https://media.githubusercontent.com/media/opencv/opencv_zoo/main/models/face_recognition_sface"
 GH_RAW_YUNET = "https://github.com/opencv/opencv_zoo/raw/main/models/face_detection_yunet"
 GH_RAW_SFACE = "https://github.com/opencv/opencv_zoo/raw/main/models/face_recognition_sface"
+GH_RAWREF_YUNET = (
+    "https://github.com/opencv/opencv_zoo/raw/refs/heads/main/models/face_detection_yunet"
+)
+GH_RAWREF_SFACE = (
+    "https://github.com/opencv/opencv_zoo/raw/refs/heads/main/models/face_recognition_sface"
+)
+JSDELIVR_YUNET = "https://cdn.jsdelivr.net/gh/opencv/opencv_zoo@main/models/face_detection_yunet"
+JSDELIVR_SFACE = "https://cdn.jsdelivr.net/gh/opencv/opencv_zoo@main/models/face_recognition_sface"
 
 CATALOG_SIZE = 7
 
 
-def _pack_urls(hf_base: str, gh_base: str, gh_raw_base: str, filename: str) -> tuple[str, ...]:
+def _pack_urls(
+    hf_base: str,
+    gh_base: str,
+    gh_raw_base: str,
+    filename: str,
+    *,
+    gh_rawref_base: str,
+    jsdelivr_base: str,
+) -> tuple[str, ...]:
     hf = f"{hf_base}/{filename}"
     return (
         f"{hf}?download=true",
         hf,
         f"{gh_base}/{filename}",
         f"{gh_raw_base}/{filename}",
+        f"{gh_rawref_base}/{filename}",
+        f"{jsdelivr_base}/{filename}",
     )
 
 
@@ -64,7 +86,14 @@ YUNET_MODELS: tuple[OnnxSpec, ...] = (
         filename="face_detection_yunet_2023mar.onnx",
         label="YuNet 2023 FP32",
         family="yunet",
-        urls=_pack_urls(HF_YUNET, GH_YUNET, GH_RAW_YUNET, "face_detection_yunet_2023mar.onnx"),
+        urls=_pack_urls(
+            HF_YUNET,
+            GH_YUNET,
+            GH_RAW_YUNET,
+            "face_detection_yunet_2023mar.onnx",
+            gh_rawref_base=GH_RAWREF_YUNET,
+            jsdelivr_base=JSDELIVR_YUNET,
+        ),
         min_bytes=50_000,
         notes="Default detector. Best quality; WIDER Face AP ≈ 0.88 / 0.87 / 0.75.",
     ),
@@ -73,7 +102,14 @@ YUNET_MODELS: tuple[OnnxSpec, ...] = (
         filename="face_detection_yunet_2023mar_int8.onnx",
         label="YuNet 2023 INT8",
         family="yunet",
-        urls=_pack_urls(HF_YUNET, GH_YUNET, GH_RAW_YUNET, "face_detection_yunet_2023mar_int8.onnx"),
+        urls=_pack_urls(
+            HF_YUNET,
+            GH_YUNET,
+            GH_RAW_YUNET,
+            "face_detection_yunet_2023mar_int8.onnx",
+            gh_rawref_base=GH_RAWREF_YUNET,
+            jsdelivr_base=JSDELIVR_YUNET,
+        ),
         min_bytes=40_000,
         notes="Quantized detector. Faster/smaller; AP drop is ~0.003 on easy.",
     ),
@@ -83,7 +119,12 @@ YUNET_MODELS: tuple[OnnxSpec, ...] = (
         label="YuNet 2023 INT8-BQ",
         family="yunet",
         urls=_pack_urls(
-            HF_YUNET, GH_YUNET, GH_RAW_YUNET, "face_detection_yunet_2023mar_int8bq.onnx"
+            HF_YUNET,
+            GH_YUNET,
+            GH_RAW_YUNET,
+            "face_detection_yunet_2023mar_int8bq.onnx",
+            gh_rawref_base=GH_RAWREF_YUNET,
+            jsdelivr_base=JSDELIVR_YUNET,
         ),
         min_bytes=40_000,
         notes="Block-quantized detector (block_size=64). Near-FP32 AP, smaller file.",
@@ -93,7 +134,14 @@ YUNET_MODELS: tuple[OnnxSpec, ...] = (
         filename="face_detection_yunet_2026may.onnx",
         label="YuNet 2026 dynamic",
         family="yunet",
-        urls=_pack_urls(HF_YUNET, GH_YUNET, GH_RAW_YUNET, "face_detection_yunet_2026may.onnx"),
+        urls=_pack_urls(
+            HF_YUNET,
+            GH_YUNET,
+            GH_RAW_YUNET,
+            "face_detection_yunet_2026may.onnx",
+            gh_rawref_base=GH_RAWREF_YUNET,
+            jsdelivr_base=JSDELIVR_YUNET,
+        ),
         min_bytes=50_000,
         notes=(
             "Dynamic H/W re-export of 2023mar (opencv_zoo default). "
@@ -108,7 +156,14 @@ SFACE_MODELS: tuple[OnnxSpec, ...] = (
         filename="face_recognition_sface_2021dec.onnx",
         label="SFace 2021 FP32",
         family="sface",
-        urls=_pack_urls(HF_SFACE, GH_SFACE, GH_RAW_SFACE, "face_recognition_sface_2021dec.onnx"),
+        urls=_pack_urls(
+            HF_SFACE,
+            GH_SFACE,
+            GH_RAW_SFACE,
+            "face_recognition_sface_2021dec.onnx",
+            gh_rawref_base=GH_RAWREF_SFACE,
+            jsdelivr_base=JSDELIVR_SFACE,
+        ),
         min_bytes=1_000_000,
         notes="Default recognizer. 128-D embeddings; eval accuracy ≈ 0.9940.",
     ),
@@ -118,7 +173,12 @@ SFACE_MODELS: tuple[OnnxSpec, ...] = (
         label="SFace 2021 INT8",
         family="sface",
         urls=_pack_urls(
-            HF_SFACE, GH_SFACE, GH_RAW_SFACE, "face_recognition_sface_2021dec_int8.onnx"
+            HF_SFACE,
+            GH_SFACE,
+            GH_RAW_SFACE,
+            "face_recognition_sface_2021dec_int8.onnx",
+            gh_rawref_base=GH_RAWREF_SFACE,
+            jsdelivr_base=JSDELIVR_SFACE,
         ),
         min_bytes=1_000_000,
         notes="Quantized recognizer. Faster/smaller; accuracy ≈ 0.9932.",
@@ -129,7 +189,12 @@ SFACE_MODELS: tuple[OnnxSpec, ...] = (
         label="SFace 2021 INT8-BQ",
         family="sface",
         urls=_pack_urls(
-            HF_SFACE, GH_SFACE, GH_RAW_SFACE, "face_recognition_sface_2021dec_int8bq.onnx"
+            HF_SFACE,
+            GH_SFACE,
+            GH_RAW_SFACE,
+            "face_recognition_sface_2021dec_int8bq.onnx",
+            gh_rawref_base=GH_RAWREF_SFACE,
+            jsdelivr_base=JSDELIVR_SFACE,
         ),
         min_bytes=1_000_000,
         notes="Block-quantized recognizer. Near-FP32 accuracy (≈ 0.9942), ~11MB.",
@@ -165,6 +230,7 @@ def _index(specs: tuple[OnnxSpec, ...]) -> dict[str, OnnxSpec]:
 YUNET_BY_ID = _index(YUNET_MODELS)
 SFACE_BY_ID = _index(SFACE_MODELS)
 ALL_MODELS: tuple[OnnxSpec, ...] = (*YUNET_MODELS, *SFACE_MODELS)
+EXPECTED_FILENAMES: tuple[str, ...] = tuple(spec.filename for spec in ALL_MODELS)
 
 
 def user_home() -> Path:
@@ -342,12 +408,17 @@ def download_missing_face_models(
     models_dir: Path | None = None,
     log=None,
     all_variants: bool = True,
+    force: bool = False,
     yunet_id: str = DEFAULT_YUNET_ID,
     sface_id: str = DEFAULT_SFACE_ID,
 ) -> Path:
-    """Download only files that are missing. Never re-fetches a valid cache hit."""
+    """Download catalog files. Valid cache hits are skipped unless ``force``."""
     if all_variants:
-        return download_all_face_models(models_dir=models_dir, log=log)
+        return download_all_face_models(models_dir=models_dir, log=log, force=force)
+    if force:
+        paths = resolve_model_paths(models_dir, yunet_id=yunet_id, sface_id=sface_id)
+        for path in (paths.yunet, paths.sface):
+            path.unlink(missing_ok=True)
     ensure_face_models(
         models_dir=models_dir,
         download=True,
@@ -358,21 +429,36 @@ def download_missing_face_models(
     return models_dir or default_models_dir()
 
 
-def download_all_face_models(*, models_dir: Path | None = None, log=None) -> Path:
+def download_all_face_models(
+    *, models_dir: Path | None = None, log=None, force: bool = False
+) -> Path:
     """Fetch every YuNet + SFace variant into the models directory."""
     root = models_dir or default_models_dir()
     root.mkdir(parents=True, exist_ok=True)
-    for spec in ALL_MODELS:
+    if log:
+        log(f"Writing {CATALOG_SIZE} ONNX files into {root}")
+        log(f"Fallback CLI: {INSTALL_COMMAND}")
+    total = len(ALL_MODELS)
+    for index, spec in enumerate(ALL_MODELS, start=1):
         dest = root / spec.filename
-        if _looks_valid(dest, spec.min_bytes):
+        if not force and _looks_valid(dest, spec.min_bytes):
             if log:
-                log(f"Already present: {dest.name}")
+                log(f"[{index}/{total}] Already present: {dest.name}")
             continue
         if log:
-            log(f"Downloading {spec.filename} from Hugging Face …")
-        _download_first_ok(spec.urls, dest, min_bytes=spec.min_bytes)
+            action = "Re-downloading" if force and dest.exists() else "Downloading"
+            log(f"[{index}/{total}] {action} {spec.filename}")
+        _download_first_ok(spec.urls, dest, min_bytes=spec.min_bytes, log=log)
         if log:
-            log(f"Saved {dest}")
+            size = dest.stat().st_size if dest.is_file() else 0
+            log(f"[{index}/{total}] Saved {dest} ({size} bytes)")
+    leftover = [
+        spec.filename
+        for spec in ALL_MODELS
+        if not _looks_valid(root / spec.filename, spec.min_bytes)
+    ]
+    if leftover:
+        raise ModelDownloadError("Still missing after download: " + ", ".join(leftover))
     return root
 
 
@@ -396,23 +482,39 @@ def _looks_like_onnx(path: Path) -> bool:
     return True
 
 
-def _download_first_ok(urls: tuple[str, ...], dest: Path, *, min_bytes: int) -> None:
+def _download_first_ok(urls: tuple[str, ...], dest: Path, *, min_bytes: int, log=None) -> None:
     errors: list[str] = []
     dest.parent.mkdir(parents=True, exist_ok=True)
+    fetchers = (
+        ("urllib+certifi", _download_url),
+        ("curl", _download_url_curl),
+    )
     for url in urls:
-        tmp = dest.with_suffix(dest.suffix + ".tmp")
-        try:
-            _download_url(url, tmp)
-            size = tmp.stat().st_size
-            if size < min_bytes or not _looks_like_onnx(tmp):
+        for method, fetch in fetchers:
+            tmp = dest.with_suffix(dest.suffix + ".tmp")
+            try:
+                fetch(url, tmp)
+                size = tmp.stat().st_size
+                if size < min_bytes or not _looks_like_onnx(tmp):
+                    tmp.unlink(missing_ok=True)
+                    errors.append(f"{method} {url} (too small or not ONNX: {size} bytes)")
+                    continue
+                tmp.replace(dest)
+                if log:
+                    log(f"  ok via {method}: {url}")
+                return
+            except FileNotFoundError as exc:
                 tmp.unlink(missing_ok=True)
-                errors.append(f"{url} (too small or not ONNX: {size} bytes)")
-                continue
-            tmp.replace(dest)
-            return
-        except (urllib.error.URLError, TimeoutError, OSError, ValueError) as exc:
-            tmp.unlink(missing_ok=True)
-            errors.append(f"{url} ({exc})")
+                errors.append(f"{method} {url} ({exc})")
+            except (
+                urllib.error.URLError,
+                TimeoutError,
+                OSError,
+                ValueError,
+                subprocess.SubprocessError,
+            ) as exc:
+                tmp.unlink(missing_ok=True)
+                errors.append(f"{method} {url} ({exc})")
     raise ModelDownloadError(f"Could not download {dest.name}. Tried:\n  " + "\n  ".join(errors))
 
 
@@ -429,7 +531,7 @@ def _download_url(url: str, dest: Path, timeout: int = 180) -> None:
     request = urllib.request.Request(
         url,
         headers={
-            "User-Agent": "CloneBins/0.1.2 (local dataset clustering)",
+            "User-Agent": USER_AGENT,
             "Accept": "application/octet-stream,*/*",
         },
     )
@@ -445,23 +547,86 @@ def _download_url(url: str, dest: Path, timeout: int = 180) -> None:
             handle.write(chunk)
 
 
+def curl_bin() -> str | None:
+    """macOS always ships ``/usr/bin/curl``; use it when frozen urllib SSL fails."""
+    for candidate in ("/usr/bin/curl", "/usr/local/bin/curl", "/opt/homebrew/bin/curl"):
+        if Path(candidate).is_file() and os.access(candidate, os.X_OK):
+            return candidate
+    return shutil.which("curl")
+
+
+def _download_url_curl(url: str, dest: Path, timeout: int = 180) -> None:
+    binary = curl_bin()
+    if not binary:
+        raise FileNotFoundError("curl is not available")
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    cmd = [
+        binary,
+        "-L",
+        "--fail",
+        "--retry",
+        "3",
+        "--retry-delay",
+        "1",
+        "--connect-timeout",
+        "20",
+        "--max-time",
+        str(timeout),
+        "-A",
+        USER_AGENT,
+        "-H",
+        "Accept: application/octet-stream,*/*",
+        "-o",
+        str(dest),
+        url,
+    ]
+    completed = subprocess.run(
+        cmd,
+        check=False,
+        capture_output=True,
+        timeout=timeout + 30,
+        text=True,
+    )
+    if completed.returncode != 0:
+        err = (completed.stderr or completed.stdout or "").strip() or f"exit {completed.returncode}"
+        dest.unlink(missing_ok=True)
+        raise OSError(err)
+
+
+def curl_install_script(models_dir: Path | None = None) -> str:
+    """One-shot ``/usr/bin/curl`` script that writes all seven ONNX files."""
+    root = models_dir or default_models_dir()
+    curl = curl_bin() or "/usr/bin/curl"
+    lines = [f"mkdir -p {root}"]
+    for spec in ALL_MODELS:
+        # GitHub LFS media URL is the most reliable when Hugging Face 404s.
+        url = next((u for u in spec.urls if "media.githubusercontent.com" in u), spec.urls[0])
+        dest = root / spec.filename
+        lines.append(f'{curl} -L --fail -A "{USER_AGENT}" -o "{dest}" "{url}"')
+    return "\n".join(lines)
+
+
 def _cli(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Download CloneBins face ONNX weights.")
     parser.add_argument("--dir", type=Path, default=None)
     parser.add_argument(
         "--all", action="store_true", help="Download every YuNet and SFace variant."
     )
+    parser.add_argument(
+        "--force", action="store_true", help="Re-download files even if they look valid."
+    )
     parser.add_argument("--yunet", default=DEFAULT_YUNET_ID)
     parser.add_argument("--sface", default=DEFAULT_SFACE_ID)
     args = parser.parse_args(argv)
     directory = args.dir or default_models_dir()
     if args.all:
-        download_all_face_models(models_dir=directory, log=print)
+        download_all_face_models(models_dir=directory, log=print, force=args.force)
     else:
-        ensure_face_models(
+        download_missing_face_models(
             models_dir=directory,
-            download=True,
             log=print,
+            all_variants=False,
+            force=args.force,
             yunet_id=args.yunet,
             sface_id=args.sface,
         )
