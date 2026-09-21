@@ -59,6 +59,7 @@ class ModelDownloadRequest(BaseModel):
     yunet: YunNetId = "2023mar"
     sface: SFaceId = "2021dec"
     all_variants: bool = True
+    force: bool = False
 
 
 class ImageOut(BaseModel):

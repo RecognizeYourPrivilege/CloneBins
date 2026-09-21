@@ -106,6 +106,8 @@ export type ModelStatus = {
   ready: boolean;
   catalog_ready?: boolean;
   all_ready?: boolean;
+  install_command?: string;
+  curl_script?: string;
 };
 
 export type ModelDownloadTask = {
@@ -115,4 +117,5 @@ export type ModelDownloadTask = {
   error: string | null;
   missing: ModelSpec[];
   missing_count: number;
+  models_dir?: string;
 };

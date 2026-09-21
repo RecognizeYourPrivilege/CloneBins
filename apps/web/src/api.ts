@@ -176,7 +176,10 @@ export async function getModelStatus(): Promise<ModelStatus> {
   return parse<ModelStatus>(await fetch(apiUrl("/api/models/status")));
 }
 
-export async function startModelDownload(settings: ClusterSettings): Promise<ModelDownloadTask> {
+export async function startModelDownload(
+  settings: ClusterSettings,
+  options: { force?: boolean } = {},
+): Promise<ModelDownloadTask> {
   return parse<ModelDownloadTask>(
     await fetch(apiUrl("/api/models/download"), {
       method: "POST",
@@ -185,6 +188,7 @@ export async function startModelDownload(settings: ClusterSettings): Promise<Mod
         yunet: settings.yunet,
         sface: settings.sface,
         all_variants: true,
+        force: Boolean(options.force),
       }),
     }),
   );
@@ -192,6 +196,24 @@ export async function startModelDownload(settings: ClusterSettings): Promise<Mod
 
 export async function getModelDownload(id: string): Promise<ModelDownloadTask> {
   return parse<ModelDownloadTask>(await fetch(apiUrl(`/api/models/download/${id}`)));
+}
+
+export async function getInstallCommand(): Promise<{
+  command: string;
+  models_dir: string;
+  home: string;
+  curl_script: string;
+}> {
+  return parse(await fetch(apiUrl("/api/models/install-command")));
+}
+
+export async function openModelsFolder(): Promise<{
+  ok: boolean;
+  models_dir: string;
+  home: string;
+  command: string;
+}> {
+  return parse(await fetch(apiUrl("/api/models/open-folder"), { method: "POST" }));
 }
 
 export async function probeShare(share: ShareRequest): Promise<{ ok: boolean; location: string; images: number }> {

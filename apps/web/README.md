@@ -25,9 +25,11 @@ npm run dev
 
 Open http://127.0.0.1:5173 — Vite proxies `/api` to http://127.0.0.1:8765.
 
-**Verify** / **Download missing** manage the local YuNet/SFace cache (log box
-under Face models). **Network share** copies SMB/SFTP/FTP images into a local
-job cache, then clusters them like a folder path.
+**Download** is always enabled and writes all seven YuNet/SFace ONNX files
+(progress in the log box). **Verify** is optional status. **Open models
+folder** / **Copy install command** expose `~/.cache/clonebins/models` and
+`clonebins models download --force`. **Network share** copies SMB/SFTP/FTP
+images into a local job cache, then clusters them like a folder path.
 
 Bins are **not** in the zip until you tick **in zip** or **Include all in zip**.
 **open ↗** on a thumbnail opens the original file in a new window.

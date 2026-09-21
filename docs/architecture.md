@@ -88,9 +88,10 @@ IP with `CLONEBINS_API_HOST=0.0.0.0`). It does not embed faces on-device in v1.
   so a late-discovered face dimension cannot emit mixed row lengths.
 - Network shares (SMB / SFTP / FTP) are an API I/O step: list/copy images into
   the job cache, then `run_pipeline()` as usual. Credentials are not logged.
-- Face-model **Verify** is `GET /api/models/status`. **Download missing** is
-  `POST /api/models/download` (poll `GET /api/models/download/{id}`); only
-  absent ONNX files are fetched. CLI: `clonebins models status|verify|download`.
+- Face-model **Verify** is `GET /api/models/status` (best-effort). **Download**
+  is `POST /api/models/download` and is not gated on Verify (poll
+  `GET /api/models/download/{id}`). CLI: `clonebins models download --force`.
+  Open folder: `POST /api/models/open-folder`.
 - Web zip export: bins start unchecked; include individually or via Include all.
 - Detector/recognizer: YuNet 2023 FP32 / INT8 / INT8-BQ and SFace 2021 FP32 /
   INT8 / INT8-BQ plus YuNet `2026may` from opencv_zoo (Hugging Face mirrors). Docker bakes all seven.

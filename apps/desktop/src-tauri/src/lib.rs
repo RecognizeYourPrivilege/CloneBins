@@ -117,11 +117,7 @@ fn spawn_sidecar() -> Result<Child, String> {
 /// an empty or unexpanded HOME; without this, models land outside
 /// `~/.cache/clonebins/models`.
 fn apply_user_cache_env(cmd: &mut Command) {
-    let home = std::env::var_os("HOME")
-        .filter(|value| !value.is_empty() && value != "~")
-        .map(PathBuf::from)
-        .or_else(|| std::env::var_os("USERPROFILE").map(PathBuf::from));
-    let Some(home) = home else {
+    let Some(home) = resolve_login_home() else {
         return;
     };
     cmd.env("HOME", &home);
@@ -131,6 +127,32 @@ fn apply_user_cache_env(cmd: &mut Command) {
             home.join(".cache").join("clonebins").join("models"),
         );
     }
+}
+
+fn resolve_login_home() -> Option<PathBuf> {
+    for key in ["HOME", "USERPROFILE"] {
+        if let Some(raw) = std::env::var_os(key) {
+            if !raw.is_empty() && raw != "~" {
+                let path = PathBuf::from(raw);
+                if path.is_absolute() {
+                    return Some(path);
+                }
+            }
+        }
+    }
+    if let Ok(user) = std::env::var("USER") {
+        if !user.is_empty() && !user.contains('/') && !user.contains('\\') {
+            let mac = PathBuf::from(format!("/Users/{user}"));
+            if mac.is_dir() {
+                return Some(mac);
+            }
+            let linux = PathBuf::from(format!("/home/{user}"));
+            if linux.is_dir() {
+                return Some(linux);
+            }
+        }
+    }
+    None
 }
 
 /// Sidecar next to the executable (`CloneBins.app/Contents/MacOS/clonebins-api`,
