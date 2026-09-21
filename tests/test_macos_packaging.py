@@ -19,8 +19,9 @@ def test_macos_release_uses_native_intel_runner() -> None:
     # Comments may mention the old command; the job steps must not run it.
     assert 'arch -x86_64 "$PYTHON"' not in text
     assert "arch -x86_64 /usr/bin/true" not in text
-    assert "cancel-in-progress: false" in text
+    assert "cancel-in-progress: true" in text
     assert "release-macos-${{ github.ref }}" in text
+    assert "needs.macos-dmg.result == 'success'" in text
     assert "CloneBins-${VERSION}-macos-${{ matrix.arch }}.dmg" in text
     assert "APPLE_CERTIFICATE" in text
     assert "APPLE_API_KEY" in text
