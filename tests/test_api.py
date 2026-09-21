@@ -53,7 +53,7 @@ def test_models_status_and_download_skips_present(tmp_path, monkeypatch):
 
     calls: list[str] = []
 
-    def fake_download(urls, dest, min_bytes):
+    def fake_download(urls, dest, min_bytes, log=None):
         calls.append(dest.name)
         dest.write_bytes(b"x" * (min_bytes + 8))
 
@@ -87,6 +87,16 @@ def test_models_status_and_download_skips_present(tmp_path, monkeypatch):
     assert last["status"] == "done"
     assert calls == []
     assert any("already present" in line.lower() or "nothing to download" in line.lower() for line in last["logs"])
+
+    install = client.get("/api/models/install-command")
+    assert install.status_code == 200
+    assert install.json()["command"] == "clonebins models download --force"
+    assert "face_detection_yunet_2023mar.onnx" in install.json()["curl_script"]
+
+    opened = client.post("/api/models/open-folder")
+    assert opened.status_code == 200
+    assert opened.json()["models_dir"] == str(tmp_path)
+    assert Path(opened.json()["models_dir"]).is_dir()
 
 
 def test_from_share_then_cluster(tmp_path, monkeypatch):

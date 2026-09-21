@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.3 — 2026-09-21
+
+- **Download is always enabled.** The desktop/web **Download** button no longer waits for Verify. v0.1.2 still gated the button on `modelMissing > 0`, so a broken Verify left Download disabled and files never arrived.
+- **Writes all 7 ONNX files** into `~/.cache/clonebins/models` (or `CLONEBINS_MODELS_DIR`). Hugging Face first, then GitHub LFS / raw / jsDelivr. If frozen-sidecar urllib/SSL fails, the downloader uses `/usr/bin/curl` (macOS always has it).
+- **CLI fallback that always does the same thing:** `clonebins models download --force` (all seven files; `--force` re-fetches even if they look valid). UI also has **Open models folder** and **Copy install command**.
+- Verify is best-effort status only. The sidecar still pins `HOME` / `CLONEBINS_MODELS_DIR` to the Mac user's real home (`/Users/$USER` if Finder left HOME empty).
+- macOS arm64 + x64 DMGs rebuilt and published on the `v0.1.3` release.
+
 ## 0.1.2 — 2026-09-21
 
 - **macOS Verify / Download:** the desktop sidecar and API now resolve the model cache as `Path.home() / ".cache" / "clonebins" / "models"` (or `CLONEBINS_MODELS_DIR`). Empty or literal `~` HOME values from Finder-launched apps no longer leave an unexpanded path. The Tauri sidecar exports the same `HOME` / `CLONEBINS_MODELS_DIR` as the Mac user running CloneBins.app.

@@ -36,7 +36,9 @@ case "$KIND" in
     extra=(
       --hidden-import typer
       --hidden-import rich
+      --hidden-import certifi
       --collect-all clonebins_cli
+      --collect-all certifi
     )
     ;;
   *)
