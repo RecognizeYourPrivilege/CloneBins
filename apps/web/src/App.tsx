@@ -45,10 +45,12 @@ export default function App() {
   const [selectedImages, setSelectedImages] = useState<Set<string>>(new Set());
   const [share, setShare] = useState<ShareRequest>(EMPTY_SHARE);
   const [modelLog, setModelLog] = useState<string[]>([
-    "Face models stay on this machine. Click Verify to see what is cached.",
+    "Face models stay on this machine. Download is always available — Verify is optional status.",
+    "CLI fallback: clonebins models download --force",
   ]);
   const [modelMissing, setModelMissing] = useState<number | null>(null);
   const [modelTask, setModelTask] = useState<ModelDownloadTask | null>(null);
+  const [modelsDir, setModelsDir] = useState("~/.cache/clonebins/models");
   const logBox = useRef<HTMLPreElement | null>(null);
 
   useEffect(() => {
@@ -76,7 +78,8 @@ export default function App() {
           setModelTask(next);
           setModelLog(next.logs.length ? next.logs : ["Downloading…"]);
           setModelMissing(next.missing_count);
-          if (next.status === "done") {
+          if (next.models_dir) setModelsDir(next.models_dir);
+          if (next.status === "done" || next.status === "error") {
             void api.getHealth().then(setHealth).catch(() => undefined);
           }
         })
@@ -198,14 +201,16 @@ export default function App() {
         ),
       ].filter(Boolean);
       if (status.missing_count === 0) {
-        lines.push("All 7 opencv_zoo ONNX files are present. Download stays inactive.");
+        lines.push("All 7 opencv_zoo ONNX files are present. Download can re-check or leave them.");
       } else {
         lines.push(
-          `${status.missing_count} missing — Download is now active (fetches only missing files from Hugging Face).`,
+          `${status.missing_count} missing — click Download (always enabled) to fetch them.`,
         );
       }
+      lines.push("CLI fallback: clonebins models download --force");
       setModelLog(lines);
       setModelMissing(status.missing_count);
+      setModelsDir(status.models_dir);
       setHealth((prev) =>
         prev
           ? {
@@ -231,17 +236,50 @@ export default function App() {
   }
 
   async function onDownloadModels() {
-    if (modelMissing === null || modelMissing <= 0) return;
-    setBusy(true);
+    setError(null);
+    setModelLog(["Starting download of all 7 ONNX files… Verify is not required."]);
+    try {
+      const task = await api.startModelDownload(settings, { force: false });
+      setModelTask(task);
+      setModelLog(task.logs.length ? task.logs : ["Downloading…"]);
+      if (task.models_dir) setModelsDir(task.models_dir);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      setError(message);
+      setModelLog((prev) => [
+        ...prev,
+        `Download failed: ${message}`,
+        "CLI fallback: clonebins models download --force",
+      ]);
+    }
+  }
+
+  async function onOpenModelsFolder() {
     setError(null);
     try {
-      const task = await api.startModelDownload(settings);
-      setModelTask(task);
-      setModelLog(task.logs.length ? task.logs : ["Starting download of missing models…"]);
+      const result = await api.openModelsFolder();
+      setModelsDir(result.models_dir);
+      setModelLog((prev) => [
+        ...prev,
+        `Models folder: ${result.models_dir}`,
+        result.ok ? "Opened in Finder / file manager." : "Could not open the folder automatically.",
+      ]);
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setBusy(false);
+      setModelLog((prev) => [
+        ...prev,
+        `Open folder failed: ${err instanceof Error ? err.message : String(err)}`,
+        `Path: ${modelsDir}`,
+      ]);
+    }
+  }
+
+  async function onCopyInstallCommand() {
+    const command = "clonebins models download --force";
+    try {
+      await navigator.clipboard.writeText(command);
+      setModelLog((prev) => [...prev, `Copied: ${command}`]);
+    } catch {
+      setModelLog((prev) => [...prev, `Install command: ${command}`]);
     }
   }
 
@@ -273,7 +311,7 @@ export default function App() {
       : clustering
         ? 15
         : 0;
-  const downloadEnabled = modelMissing !== null && modelMissing > 0 && !downloadingModels && !busy;
+  const downloadEnabled = !downloadingModels;
 
   return (
     <div className="page">
@@ -428,13 +466,23 @@ export default function App() {
           <h2>
             <span className="step">02</span> Face models
           </h2>
-          <p className="hint">Verify the local ONNX cache, then download only what is missing.</p>
+          <p className="hint">
+            Download is always enabled and writes all 7 ONNX files to{" "}
+            <code>{modelsDir}</code>. Verify is optional status. Terminal fallback:{" "}
+            <code>clonebins models download --force</code>.
+          </p>
           <div className="btn-row">
-            <button type="button" className="ghost" disabled={busy || clustering || downloadingModels} onClick={() => void onVerifyModels()}>
+            <button type="button" className="ghost" disabled={downloadingModels} onClick={() => void onVerifyModels()}>
               Verify
             </button>
-            <button type="button" disabled={!downloadEnabled || clustering} onClick={() => void onDownloadModels()}>
-              Download missing
+            <button type="button" disabled={!downloadEnabled} onClick={() => void onDownloadModels()}>
+              Download
+            </button>
+            <button type="button" className="ghost" disabled={downloadingModels} onClick={() => void onOpenModelsFolder()}>
+              Open models folder
+            </button>
+            <button type="button" className="ghost" disabled={downloadingModels} onClick={() => void onCopyInstallCommand()}>
+              Copy install command
             </button>
           </div>
           <pre className="logbox" ref={logBox} role="log" aria-live="polite">

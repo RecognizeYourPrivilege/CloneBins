@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import os
+import subprocess
+import sys
 import threading
 import uuid
 from pathlib import Path
@@ -27,11 +29,14 @@ from clonebins_api.schemas import (
 )
 from clonebins_api.shares import ShareError, ShareSpec, probe_share
 from clonebins_core.models import (
+    INSTALL_COMMAND,
     catalog_status,
+    curl_install_script,
     default_models_dir,
     download_missing_face_models,
     missing_model_specs,
     models_present,
+    user_home,
 )
 
 app = FastAPI(
@@ -100,6 +105,8 @@ def _models_payload(models_dir: Path | None = None) -> dict:
         "missing_count": len(missing),
         "ready": models_present(directory),
         "catalog_ready": catalog["all_ready"],
+        "install_command": INSTALL_COMMAND,
+        "curl_script": curl_install_script(directory),
     }
 
 
@@ -124,6 +131,7 @@ def health() -> dict:
         "models_dir": str(directory),
         "models_ready": models_present(directory),
         "models": catalog,
+        "install_command": INSTALL_COMMAND,
     }
 
 
@@ -140,13 +148,41 @@ def models_status() -> dict:
 
 @app.post("/api/models/download")
 def models_download(body: ModelDownloadRequest) -> dict:
-    """Download only missing face models. Poll GET /api/models/download/{id} for logs."""
+    """Download YuNet/SFace ONNX files. Always starts; Verify is not required.
+
+    Poll GET /api/models/download/{id} for logs. Uses urllib+certifi, then
+    system curl if the frozen sidecar cannot complete TLS.
+    """
     task = _ModelTask()
     with _model_tasks_lock:
         _model_tasks[task.id] = task
     thread = threading.Thread(target=_run_model_download, args=(task, body), daemon=True)
     thread.start()
     return task.snapshot()
+
+
+@app.get("/api/models/install-command")
+def models_install_command() -> dict:
+    directory = default_models_dir()
+    return {
+        "command": INSTALL_COMMAND,
+        "models_dir": str(directory),
+        "home": str(user_home()),
+        "curl_script": curl_install_script(directory),
+    }
+
+
+@app.post("/api/models/open-folder")
+def models_open_folder() -> dict:
+    directory = default_models_dir()
+    directory.mkdir(parents=True, exist_ok=True)
+    opened = _open_directory(directory)
+    return {
+        "ok": opened,
+        "models_dir": str(directory),
+        "home": str(user_home()),
+        "command": INSTALL_COMMAND,
+    }
 
 
 @app.get("/api/models/download/{task_id}")
@@ -166,41 +202,63 @@ def _run_model_download(task: _ModelTask, body: ModelDownloadRequest) -> None:
     expected = catalog["expected"]
     n_yunet = catalog["yunet_count"]
     n_sface = catalog["sface_count"]
-    task.log(f"Verify {expected} ONNX files ({n_yunet} YuNet + {n_sface} SFace)")
+    task.log(f"Catalog {expected} ONNX files ({n_yunet} YuNet + {n_sface} SFace)")
     for family in ("yunet", "sface"):
         for item in catalog[family]:
             mark = "ready" if item["ready"] else "MISSING"
             task.log(f"  {family} {item['id']}: {mark}  {item['filename']}")
-    if not missing:
-        task.log("Verify: every catalogued YuNet / SFace file is already present.")
-        task.log("Nothing to download.")
+    if not missing and not body.force:
+        task.log("Every catalogued YuNet / SFace file is already present.")
+        task.log("Nothing to download. Use force to re-fetch.")
+        task.log(f"CLI fallback: {INSTALL_COMMAND}")
         with task.lock:
             task.status = "done"
         return
-    task.log(f"Missing {len(missing)} file(s): " + ", ".join(item["filename"] for item in missing))
+    if body.force:
+        task.log("Force: re-downloading catalog files even if they look valid.")
+    if missing:
+        names = ", ".join(item["filename"] for item in missing)
+        task.log(f"Missing {len(missing)} file(s): {names}")
     try:
         download_missing_face_models(
             models_dir=directory,
             log=task.log,
             all_variants=body.all_variants,
+            force=body.force,
             yunet_id=body.yunet,
             sface_id=body.sface,
         )
         leftover = missing_model_specs(directory)
         if leftover:
             task.log("Still missing: " + ", ".join(item["filename"] for item in leftover))
+            task.log(f"CLI fallback: {INSTALL_COMMAND}")
             with task.lock:
                 task.status = "error"
                 task.error = "Some models could not be downloaded"
         else:
-            task.log("All requested models are on disk.")
+            task.log(f"All {expected} ONNX files are on disk in {directory}")
             with task.lock:
                 task.status = "done"
     except Exception as exc:
         task.log(f"Error: {exc}")
+        task.log(f"CLI fallback: {INSTALL_COMMAND}")
         with task.lock:
             task.status = "error"
             task.error = str(exc)
+
+
+def _open_directory(path: Path) -> bool:
+    if sys.platform == "darwin":
+        cmd = ["open", str(path)]
+    elif sys.platform == "win32":
+        cmd = ["explorer", str(path)]
+    else:
+        cmd = ["xdg-open", str(path)]
+    try:
+        subprocess.run(cmd, check=False, timeout=15, capture_output=True)
+        return True
+    except Exception:
+        return False
 
 
 @app.post("/api/jobs/upload")

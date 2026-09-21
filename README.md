@@ -3,10 +3,11 @@
 Cluster AI-generated images by **face** and **body/identity**, then drop each
 identity into its own folder for LoRA training datasets.
 
-v0.1.2 is a local CLI, a local web UI, a Tauri 2 desktop shell, an iOS SwiftUI
-client, and a shared Python core. New in this release: macOS Verify/Download
-looks in `~/.cache/clonebins/models` (home expanded correctly) and checks all
-seven YuNet + SFace ONNX files. See [CHANGELOG.md](CHANGELOG.md).
+v0.1.3 is a local CLI, a local web UI, a Tauri 2 desktop shell, an iOS SwiftUI
+client, and a shared Python core. New in this release: the desktop **Download**
+button is always enabled (Verify cannot block it) and writes all seven YuNet +
+SFace ONNX files into `~/.cache/clonebins/models`. Terminal fallback:
+`clonebins models download --force`. See [CHANGELOG.md](CHANGELOG.md).
 
 Processing is **offline-first / user-controlled**: CLI, web, and desktop keep
 images on the machine that runs `clonebins_core`. The iOS app sends photos you
@@ -127,8 +128,8 @@ They are stored in `~/.cache/clonebins/models` (override with
 `CLONEBINS_MODELS_DIR`). After they exist, **no network is used**.
 
 ```bash
-clonebins models download          # default FP32 pair (skips files already cached)
-clonebins models download --all    # all seven ONNX files; skips files already cached
+clonebins models download          # all seven ONNX files; skips files already cached
+clonebins models download --force  # re-fetch all seven even if they look valid
 clonebins models status            # present vs missing
 clonebins models verify            # alias for status
 ```
@@ -238,10 +239,10 @@ the FastAPI process on this machine.
 
 Prefer Docker for a one-shot UI (models included): see [Docker (web UI)](#docker-web-ui).
 
-**Face models in the UI:** use **Verify** (writes present/missing into the log
-box) then **Download missing** (inactive until Verify finds gaps; fetches only
-those files). The old “Download face models if missing” checkbox is gone — it
-did not surface progress. CLI: `clonebins models verify` / `download`.
+**Face models in the UI:** **Download** is always enabled and writes all seven
+ONNX files into `~/.cache/clonebins/models` (progress in the log box). **Verify**
+is optional status. **Open models folder** / **Copy install command** are
+available if the UI path flakes. CLI: `clonebins models download --force`.
 
 Flow: upload jpg/png/webp (corrupt files are skipped and listed), type a
 folder path on this machine, **or connect a network share** → set threshold /
@@ -330,13 +331,13 @@ GitHub Actions publishes Linux, macOS, and Windows installers on
 
 | File | Platform |
 | --- | --- |
-| `CloneBins-0.1.2-macos-arm64.dmg` | Apple Silicon (unsigned / ad-hoc signed) |
-| `CloneBins-0.1.2-macos-x64.dmg` | Intel Mac (unsigned / ad-hoc signed) |
-| `CloneBins-0.1.2-ubuntu-amd64.deb` | Ubuntu / Debian |
-| `CloneBins-0.1.2-linux-x64.AppImage` | Generic glibc Linux |
-| `CloneBins-0.1.2-archlinux-x86_64.pkg.tar.zst` | Arch |
-| `CloneBins-0.1.2-windows-x64-setup.exe` | Windows 10/11 NSIS (current user) |
-| `CloneBins-0.1.2-windows-x64.zip` | Windows portable (`CloneBins.exe` + `clonebins-api.exe`) |
+| `CloneBins-0.1.3-macos-arm64.dmg` | Apple Silicon (unsigned / ad-hoc signed) |
+| `CloneBins-0.1.3-macos-x64.dmg` | Intel Mac (unsigned / ad-hoc signed) |
+| `CloneBins-0.1.3-ubuntu-amd64.deb` | Ubuntu / Debian |
+| `CloneBins-0.1.3-linux-x64.AppImage` | Generic glibc Linux |
+| `CloneBins-0.1.3-archlinux-x86_64.pkg.tar.zst` | Arch |
+| `CloneBins-0.1.3-windows-x64-setup.exe` | Windows 10/11 NSIS (current user) |
+| `CloneBins-0.1.3-windows-x64.zip` | Windows portable (`CloneBins.exe` + `clonebins-api.exe`) |
 
 macOS DMGs are **unsigned / ad-hoc signed**, not notarized — see
 [apps/desktop/README.md](apps/desktop/README.md) (optional Apple secrets).
@@ -414,7 +415,7 @@ filesystem; CloneBins copies if linking fails.
 - iOS v1 uploads the photos you pick to **your** `clonebins-api` (loopback or
   LAN). That is still not a hosted service.
 - The only optional vendor network call is fetching YuNet/SFace weights onto
-  the API/CLI host (UI **Download missing**, or `clonebins models download`).
+  the API/CLI host (UI **Download**, or `clonebins models download --force`).
 - Share passwords/keys stay on that same host and are not logged.
 - Do not point `--input` at folders you would not want processed on that
   machine; output bins are extra copies/hardlinks of those files.
