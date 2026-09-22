@@ -1,7 +1,8 @@
 {
   "bundle": {
     "resources": {
-      "sidecars/clonebins-api.exe": "clonebins-api.exe"
+      "sidecars/clonebins-api.exe": "clonebins-api.exe",
+      "../resources/models/": "models/"
     },
     "windows": {
       "nsis": {

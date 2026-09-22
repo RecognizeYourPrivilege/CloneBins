@@ -20,6 +20,10 @@ def test_download_button_is_not_gated_on_verify() -> None:
 
 def test_download_api_always_sends_all_variants() -> None:
     assert "all_variants: true" in API
-    assert "force: Boolean(options.force)" in API
+    assert "Boolean(options.force)" in API
     assert "/api/models/open-folder" in API
     assert "/api/models/install-command" in API
+    assert "/api/models/verify" in API
+    assert "startModelVerify" in API
+    assert "copying baked models" in APP
+    assert "downloads only missing" in APP

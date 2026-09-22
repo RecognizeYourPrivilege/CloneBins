@@ -22,14 +22,16 @@ import os
 import shutil
 import ssl
 import subprocess
+import sys
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
 
 ENV_MODELS_DIR = "CLONEBINS_MODELS_DIR"
+ENV_BUNDLED_MODELS = "CLONEBINS_BUNDLED_MODELS"
 INSTALL_COMMAND = "clonebins models download --force"
-USER_AGENT = "CloneBins/0.1.3 (local dataset clustering)"
+USER_AGENT = "CloneBins/0.1.4 (local dataset clustering)"
 
 HF_YUNET = "https://huggingface.co/opencv/face_detection_yunet/resolve/main"
 HF_SFACE = "https://huggingface.co/opencv/face_recognition_sface/resolve/main"
@@ -277,6 +279,130 @@ def default_models_dir() -> Path:
     return (user_home() / ".cache" / "clonebins" / "models").resolve()
 
 
+def _norm_dir(path: Path) -> Path:
+    expanded = path.expanduser()
+    try:
+        return expanded.resolve(strict=False)
+    except (OSError, RuntimeError):
+        return expanded
+
+
+def bundled_models_dirs() -> list[Path]:
+    """Directories that may hold ONNX files shipped inside the app.
+
+    Search order matches packaging:
+    ``CLONEBINS_BUNDLED_MODELS``, PyInstaller extract dir, next to the
+    executable (Windows zip / NSIS ``models/``), macOS
+    ``Contents/Resources/models``, Linux ``/usr/share/clonebins/models`` and
+    Tauri's ``/usr/lib/<exe>/models``, then the repo
+    ``apps/desktop/resources/models`` folder filled at package time.
+    """
+    seen: set[Path] = set()
+    ordered: list[Path] = []
+
+    def add(path: Path | None) -> None:
+        if path is None:
+            return
+        try:
+            resolved = _norm_dir(path)
+        except (OSError, RuntimeError, ValueError):
+            return
+        if resolved in seen:
+            return
+        seen.add(resolved)
+        ordered.append(resolved)
+
+    override = (os.environ.get(ENV_BUNDLED_MODELS) or "").strip()
+    if override:
+        add(Path(override))
+
+    meipass = getattr(sys, "_MEIPASS", None)
+    if meipass:
+        add(Path(meipass) / "models")
+
+    try:
+        exe = Path(sys.executable).resolve()
+    except OSError:
+        exe = None
+    if exe is not None:
+        add(exe.parent / "models")
+        add(exe.parent / "resources" / "models")
+        if exe.parent.name == "MacOS":
+            add(exe.parent.parent / "Resources" / "models")
+        # Tauri dev/release layout: target/(debug|release)/../lib/<exe>/models
+        if exe.parent.name in {"release", "debug"}:
+            add(exe.parent.parent / "lib" / exe.name / "models")
+
+    appdir = (os.environ.get("APPDIR") or "").strip()
+    lib_names = ("clonebins-desktop", "CloneBins", "clonebins")
+    if appdir:
+        app_root = Path(appdir)
+        add(app_root / "usr" / "share" / "clonebins" / "models")
+        for name in lib_names:
+            add(app_root / "usr" / "lib" / name / "models")
+    add(Path("/usr/share/clonebins/models"))
+    for name in lib_names:
+        add(Path("/usr/lib") / name / "models")
+
+    here = Path(__file__).resolve()
+    if len(here.parents) > 4:
+        add(here.parents[4] / "apps" / "desktop" / "resources" / "models")
+    return ordered
+
+
+def find_bundled_file(spec: OnnxSpec) -> Path | None:
+    """Return a baked copy of ``spec`` that already looks like a real ONNX file."""
+    for directory in bundled_models_dirs():
+        candidate = directory / spec.filename
+        if _looks_valid(candidate, spec.min_bytes):
+            return candidate
+    return None
+
+
+def copy_bundled_into_cache(
+    models_dir: Path | None = None,
+    *,
+    log=None,
+) -> list[str]:
+    """Copy baked ONNX files into the user cache when the cache file is missing.
+
+    Files already valid in the cache are left untouched. Returns filenames copied.
+    """
+    root = models_dir or default_models_dir()
+    root.mkdir(parents=True, exist_ok=True)
+    copied: list[str] = []
+    for spec in ALL_MODELS:
+        dest = root / spec.filename
+        if _looks_valid(dest, spec.min_bytes):
+            continue
+        src = find_bundled_file(spec)
+        if src is None:
+            continue
+        try:
+            if src.resolve() == dest.resolve():
+                continue
+        except OSError:
+            pass
+        if log:
+            log(f"Copying baked {spec.filename} from {src.parent}")
+        tmp = dest.with_suffix(dest.suffix + ".copytmp")
+        try:
+            shutil.copy2(src, tmp)
+        except OSError as exc:
+            tmp.unlink(missing_ok=True)
+            if log:
+                log(f"Could not copy baked {spec.filename}: {exc}")
+            continue
+        if not _looks_valid(tmp, spec.min_bytes):
+            tmp.unlink(missing_ok=True)
+            continue
+        tmp.replace(dest)
+        copied.append(spec.filename)
+        if log:
+            log(f"Cached baked model {dest} ({dest.stat().st_size} bytes)")
+    return copied
+
+
 def yunet_spec(yunet_id: str = DEFAULT_YUNET_ID) -> OnnxSpec:
     try:
         return YUNET_BY_ID[yunet_id]
@@ -344,12 +470,14 @@ def catalog_status(models_dir: Path | None = None) -> dict:
 def _spec_status(spec: OnnxSpec, root: Path) -> dict:
     path = root / spec.filename
     ready = _looks_valid(path, spec.min_bytes)
+    bundled = find_bundled_file(spec)
     return {
         "id": spec.id,
         "filename": spec.filename,
         "label": spec.label,
         "notes": spec.notes,
         "ready": ready,
+        "bundled": bundled is not None,
         "bytes": path.stat().st_size if path.is_file() else 0,
         "path": str(path),
         "source": spec.urls[0],
@@ -377,14 +505,23 @@ def ensure_face_models(
     if not _looks_valid(paths.sface, sface.min_bytes):
         needed.append((paths.sface, sface))
 
+    if needed:
+        copy_bundled_into_cache(paths.yunet.parent, log=log)
+        needed = []
+        if not _looks_valid(paths.yunet, yunet.min_bytes):
+            needed.append((paths.yunet, yunet))
+        if not _looks_valid(paths.sface, sface.min_bytes):
+            needed.append((paths.sface, sface))
+
     if not needed:
         return paths
     if not download:
         missing = ", ".join(spec.filename for _, spec in needed)
         raise ModelDownloadError(
             f"Face models missing ({missing}) in {paths.yunet.parent}. "
-            "Run `clonebins models download` once (requires network), "
-            "or set CLONEBINS_MODELS_DIR to a folder that already contains them."
+            "Run `clonebins models verify` to copy baked weights and download "
+            "only what is still missing, or set CLONEBINS_MODELS_DIR to a folder "
+            "that already contains them."
         )
 
     for dest, spec in needed:
@@ -429,12 +566,55 @@ def download_missing_face_models(
     return models_dir or default_models_dir()
 
 
+def verify_and_fill_face_models(
+    *, models_dir: Path | None = None, log=None, force: bool = False
+) -> Path:
+    """Check the user cache, copy baked weights, then download only gaps.
+
+    Preference order: files already in the cache, models shipped inside the
+    app bundle, then the network for anything still missing. ``force`` skips
+    the cache and baked copy and re-fetches every catalog file.
+    """
+    root = models_dir or default_models_dir()
+    root.mkdir(parents=True, exist_ok=True)
+    if log:
+        log(f"Verify cache {root} (home {user_home()})")
+        baked = [str(path) for path in bundled_models_dirs() if path.is_dir()]
+        log("Baked dirs: " + (", ".join(baked) if baked else "(none)"))
+    if not force:
+        copied = copy_bundled_into_cache(root, log=log)
+        if log and not copied:
+            log("No baked files needed copying (cache already had them, or none are bundled).")
+    catalog = catalog_status(root)
+    if log:
+        log(
+            f"Catalog {catalog['expected']} ONNX files "
+            f"({catalog['yunet_count']} YuNet + {catalog['sface_count']} SFace)"
+        )
+        for family in ("yunet", "sface"):
+            for item in catalog[family]:
+                if item["ready"]:
+                    mark = "ready"
+                elif item.get("bundled"):
+                    mark = "baked, not yet cached"
+                else:
+                    mark = "MISSING"
+                log(f"  {family} {item['id']}: {mark}  {item['filename']}")
+    return download_all_face_models(models_dir=root, log=log, force=force)
+
+
 def download_all_face_models(
     *, models_dir: Path | None = None, log=None, force: bool = False
 ) -> Path:
-    """Fetch every YuNet + SFace variant into the models directory."""
+    """Fetch every YuNet + SFace variant into the models directory.
+
+    Unless ``force``, valid cache files are kept and missing files are filled
+    from the baked app bundle before any network request.
+    """
     root = models_dir or default_models_dir()
     root.mkdir(parents=True, exist_ok=True)
+    if not force:
+        copy_bundled_into_cache(root, log=log)
     if log:
         log(f"Writing {CATALOG_SIZE} ONNX files into {root}")
         log(f"Fallback CLI: {INSTALL_COMMAND}")

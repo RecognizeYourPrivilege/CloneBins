@@ -21,6 +21,7 @@ from clonebins_core.models import (
     catalog_status,
     default_models_dir,
     download_missing_face_models,
+    verify_and_fill_face_models,
     ensure_face_models,
     models_present,
 )
@@ -115,7 +116,7 @@ def version() -> None:
     try:
         console.print(pkg_version("clonebins"))
     except PackageNotFoundError:
-        console.print("0.1.3")
+        console.print("0.1.4")
 
 
 @app.command()
@@ -279,9 +280,24 @@ def models_status() -> None:
 
 
 @models_app.command("verify")
-def models_verify() -> None:
-    """Alias for ``status`` — list present vs missing YuNet / SFace files."""
-    models_status()
+def models_verify(
+    models_dir: Annotated[
+        Optional[Path],
+        typer.Option("--dir", help="Override CLONEBINS_MODELS_DIR."),
+    ] = None,
+) -> None:
+    """Check the cache, copy baked ONNX files, then download only what is missing.
+
+    Order: files already in ``~/.cache/clonebins/models``, weights shipped inside
+    the app, then the network for anything still absent.
+    """
+    try:
+        root = verify_and_fill_face_models(models_dir=models_dir, log=err_console.print)
+    except Exception as exc:
+        err_console.print(f"[red]{exc}[/red]")
+        err_console.print(f"Fallback: {INSTALL_COMMAND}")
+        raise typer.Exit(code=1) from exc
+    console.print(f"All variants in {root}")
 
 
 @models_app.command("download")
@@ -304,10 +320,11 @@ def models_download(
     yunet: Annotated[str, typer.Option("--yunet")] = DEFAULT_YUNET_ID,
     sface: Annotated[str, typer.Option("--sface")] = DEFAULT_SFACE_ID,
 ) -> None:
-    """Download all seven YuNet + SFace ONNX weights into ~/.cache/clonebins/models.
+    """Download YuNet + SFace ONNX weights into ~/.cache/clonebins/models.
 
-    Already-valid files are skipped unless ``--force``. This is the Terminal
-    fallback when the desktop Download button cannot reach the network:
+    Baked app weights are copied first. Already-valid files are skipped unless
+    ``--force``. This is the Terminal fallback when the desktop button cannot
+    reach the network:
 
         clonebins models download --force
     """
