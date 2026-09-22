@@ -11,6 +11,6 @@ Release builds download the seven OpenCV zoo ONNX weights into this directory
 | Docker | `/opt/clonebins/models` (also seeded into `/models`) |
 
 The files are gitignored (`*.onnx`). A fresh install still uses the user cache
-`~/.cache/clonebins/models` (or `CLONEBINS_MODELS_DIR`). On first launch and on
-**Verify**, CloneBins copies baked files into that cache and downloads only
-what is still missing.
+`~/.cache/clonebins/models` (or `CLONEBINS_MODELS_DIR`). On first launch
+CloneBins copies baked files into that cache. There is no models UI. The CLI
+downloads only what is still missing (`clonebins models verify`).

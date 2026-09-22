@@ -3,7 +3,7 @@
 ## 0.1.4 — 2026-09-22
 
 - **Baked models.** Desktop installers ship all seven YuNet + SFace ONNX files inside the app (macOS `Contents/Resources/models`, Linux `/usr/share/clonebins/models`, Windows `models/` next to the exe). Docker keeps a bundle copy at `/opt/clonebins/models` and seeds `/models`. Weights are downloaded in CI at package time, not committed to git.
-- **Verify fills gaps only.** Verify checks `~/.cache/clonebins/models` (or `CLONEBINS_MODELS_DIR`), copies baked files that are missing, then downloads only what is still absent. Download stays enabled and uses the same order. First launch copies baked weights into the cache without waiting on the network.
+- **No Face models UI.** Verify, Download, Open models folder, Copy install command, and the models log are gone. On app start (and before clustering) missing weights are copied from the baked bundle into `~/.cache/clonebins/models` with no prompt. CLI `clonebins models status|verify|download` remains for power users.
 - **macOS Intel.** Native `macos-15-intel` runner, isolated venv, PyInstaller `--target-arch`, larger DMG headroom, and a bounded `hdiutil` so a stuck disk image fails instead of hanging the job. A release is published only when both DMGs succeed. Same-ref rebuilds cancel the previous run.
 - Installers republished on the `v0.1.4` release: macOS arm64 + x64 DMGs, Ubuntu deb, AppImage, Arch package, Windows NSIS + zip.
 
