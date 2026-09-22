@@ -19,8 +19,10 @@ appearance clustering).
 
 ## Demo
 
-Local web UI: cluster two identities, rename `subject_01` → `hero_main`, skip a
-corrupt file, download `clonebins.zip`.
+v1.0.0 web UI. Settings choose `face+body`, YuNet, and SFace. There is no Face
+models screen (no Verify, Download, Open models folder, or models log). Cluster
+two identities, rename `subject_01` → `hero_main`, skip a corrupt file, include
+the bins, and download `clonebins.zip`.
 
 ![CloneBins web UI with clustered bins and Download zip](docs/demo/web_ui_clusters_zip.png)
 
