@@ -176,6 +176,25 @@ export async function getModelStatus(): Promise<ModelStatus> {
   return parse<ModelStatus>(await fetch(apiUrl("/api/models/status")));
 }
 
+function modelFillBody(settings: ClusterSettings, force: boolean): string {
+  return JSON.stringify({
+    yunet: settings.yunet,
+    sface: settings.sface,
+    all_variants: true,
+    force,
+  });
+}
+
+export async function startModelVerify(settings: ClusterSettings): Promise<ModelDownloadTask> {
+  return parse<ModelDownloadTask>(
+    await fetch(apiUrl("/api/models/verify"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: modelFillBody(settings, false),
+    }),
+  );
+}
+
 export async function startModelDownload(
   settings: ClusterSettings,
   options: { force?: boolean } = {},
@@ -184,12 +203,7 @@ export async function startModelDownload(
     await fetch(apiUrl("/api/models/download"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        yunet: settings.yunet,
-        sface: settings.sface,
-        all_variants: true,
-        force: Boolean(options.force),
-      }),
+      body: modelFillBody(settings, Boolean(options.force)),
     }),
   );
 }

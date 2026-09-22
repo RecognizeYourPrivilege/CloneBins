@@ -9,23 +9,24 @@ on:
     branches:
       - main
       - cursor/linux-release-36e4
+      - cursor/bake-models-v014-1384
   workflow_dispatch:
     inputs:
       tag:
-        description: "Release tag to create or reuse (e.g. v0.1.3)"
+        description: "Release tag to create or reuse (e.g. v0.1.4)"
         required: true
-        default: "v0.1.3"
+        default: "v0.1.4"
 
 permissions:
   contents: write
 
 concurrency:
-  group: release-linux
+  group: release-linux-${{ github.ref }}
   cancel-in-progress: true
 
 env:
-  CLONEBINS_VERSION: "0.1.3"
-  RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || (startsWith(github.ref, 'refs/tags/') && github.ref_name || 'v0.1.3') }}
+  CLONEBINS_VERSION: "0.1.4"
+  RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || (startsWith(github.ref, 'refs/tags/') && github.ref_name || 'v0.1.4') }}
 
 jobs:
   ubuntu:
@@ -62,6 +63,14 @@ jobs:
             libayatana-appindicator3-dev file dpkg-dev zstd libarchive-tools \
             libfuse2 wget
 
+      - name: Bake ONNX weights into app resources
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e packages/core
+          chmod +x apps/desktop/scripts/fetch-bundled-models.sh
+          bash apps/desktop/scripts/fetch-bundled-models.sh
+          test -f apps/desktop/resources/models/face_detection_yunet_2026may.onnx
+
       - name: Freeze clonebins-api sidecar
         run: |
           python -m pip install --upgrade pip
@@ -90,45 +99,43 @@ jobs:
           DEB="$(find apps/desktop/src-tauri/target -type f -name '*.deb' | head -n 1 || true)"
           APPIMAGE="$(find apps/desktop/src-tauri/target -type f -name '*.AppImage' | head -n 1 || true)"
           DESKTOP_BIN="apps/desktop/src-tauri/target/release/clonebins-desktop"
+          MODELS=apps/desktop/resources/models
+          test -f "$MODELS/face_recognition_sface_2021dec.onnx"
+          OUT_DEB=dist/release/CloneBins-0.1.4-ubuntu-amd64.deb
           if [[ -n "${DEB:-}" ]]; then
-            if dpkg-deb -c "$DEB" | grep -q 'usr/bin/clonebins-api'; then
-              cp "$DEB" dist/release/CloneBins-0.1.3-ubuntu-amd64.deb
-            else
-              apps/desktop/scripts/package-linux.sh inject-deb \
-                --deb "$DEB" \
-                --api dist/clonebins-api \
-                --out dist/release/CloneBins-0.1.3-ubuntu-amd64.deb
-            fi
+            apps/desktop/scripts/package-linux.sh inject-deb \
+              --deb "$DEB" \
+              --api dist/clonebins-api \
+              --models "$MODELS" \
+              --out "$OUT_DEB"
           else
             echo "Tauri did not write a .deb; packaging from the raw binary" >&2
             test -x "$DESKTOP_BIN"
             apps/desktop/scripts/package-linux.sh deb \
               --desktop "$DESKTOP_BIN" \
               --api dist/clonebins-api \
-              --out dist/release/CloneBins-0.1.3-ubuntu-amd64.deb
+              --models "$MODELS" \
+              --out "$OUT_DEB"
           fi
           if [[ -n "${APPIMAGE:-}" ]]; then
-            OUT_APP=dist/release/CloneBins-0.1.3-linux-x64.AppImage
-            if grep -a -q clonebins-api "$APPIMAGE"; then
-              cp "$APPIMAGE" "$OUT_APP"
-            else
-              echo "AppImage missing sidecar; attempting inject" >&2
-              TOOL="$(find "$HOME" apps/desktop/src-tauri -name 'appimagetool*' -type f 2>/dev/null | head -n 1 || true)"
-              if [[ -z "$TOOL" ]]; then
-                wget -q -O /tmp/appimagetool.AppImage \
-                  https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
-                chmod +x /tmp/appimagetool.AppImage
-                TOOL=/tmp/appimagetool.AppImage
-              fi
-              APPIMAGETOOL="$TOOL" apps/desktop/scripts/package-linux.sh inject-appimage \
-                --appimage "$APPIMAGE" \
-                --api dist/clonebins-api \
-                --out "$OUT_APP" || cp "$APPIMAGE" "$OUT_APP"
+            OUT_APP=dist/release/CloneBins-0.1.4-linux-x64.AppImage
+            TOOL="$(find "$HOME" apps/desktop/src-tauri -name 'appimagetool*' -type f 2>/dev/null | head -n 1 || true)"
+            if [[ -z "$TOOL" ]]; then
+              wget -q -O /tmp/appimagetool.AppImage \
+                https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
+              chmod +x /tmp/appimagetool.AppImage
+              TOOL=/tmp/appimagetool.AppImage
             fi
+            APPIMAGETOOL="$TOOL" apps/desktop/scripts/package-linux.sh inject-appimage \
+              --appimage "$APPIMAGE" \
+              --api dist/clonebins-api \
+              --models "$MODELS" \
+              --out "$OUT_APP"
             chmod +x "$OUT_APP"
           fi
           ls -lh dist/release
-          dpkg-deb -c dist/release/CloneBins-0.1.3-ubuntu-amd64.deb | grep usr/bin
+          dpkg-deb -c "$OUT_DEB" | grep usr/bin
+          dpkg-deb -c "$OUT_DEB" | grep 'usr/share/clonebins/models/face_detection_yunet_2023mar.onnx'
 
       - uses: actions/upload-artifact@v4
         with:
@@ -165,6 +172,12 @@ jobs:
           chmod +x apps/desktop/scripts/freeze-python-bin.sh
           apps/desktop/scripts/freeze-python-bin.sh api /tmp/cbvenv/bin/python
 
+      - name: Bake ONNX weights into app resources
+        run: |
+          chmod +x apps/desktop/scripts/fetch-bundled-models.sh
+          PYTHON=/tmp/cbvenv/bin/python bash apps/desktop/scripts/fetch-bundled-models.sh
+          test -f apps/desktop/resources/models/face_detection_yunet_2026may.onnx
+
       - name: Install JS deps
         run: |
           npm ci --prefix apps/web
@@ -184,8 +197,10 @@ jobs:
           apps/desktop/scripts/package-linux.sh arch \
             --desktop "$DESKTOP_BIN" \
             --api dist/clonebins-api \
-            --out dist/release/CloneBins-0.1.3-archlinux-x86_64.pkg.tar.zst
-          tar -tf dist/release/CloneBins-0.1.3-archlinux-x86_64.pkg.tar.zst | grep usr/bin
+            --models apps/desktop/resources/models \
+            --out dist/release/CloneBins-0.1.4-archlinux-x86_64.pkg.tar.zst
+          tar -tf dist/release/CloneBins-0.1.4-archlinux-x86_64.pkg.tar.zst | grep usr/bin
+          tar -tf dist/release/CloneBins-0.1.4-archlinux-x86_64.pkg.tar.zst | grep 'usr/share/clonebins/models/face_recognition_sface_2021dec.onnx'
           ls -lh dist/release
 
       - uses: actions/upload-artifact@v4
@@ -196,7 +211,7 @@ jobs:
 
   publish:
     needs: [ubuntu, arch]
-    if: ${{ !cancelled() && (needs.ubuntu.result == 'success' || needs.arch.result == 'success') }}
+    if: ${{ !cancelled() && needs.ubuntu.result == 'success' && needs.arch.result == 'success' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -225,6 +240,6 @@ jobs:
           prerelease: false
           fail_on_unmatched_files: false
           files: dist/release/*
-          body_path: .github/release-notes-v0.1.3.md
+          body_path: .github/release-notes-v0.1.4.md
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

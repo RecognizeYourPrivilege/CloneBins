@@ -78,11 +78,11 @@ GitHub Actions publishes installers on
 
 | File | Distro |
 | --- | --- |
-| `CloneBins-0.1.3-ubuntu-amd64.deb` | Ubuntu / Debian (`sudo apt install ./…deb`) |
-| `CloneBins-0.1.3-linux-x64.AppImage` | Generic glibc (`chmod +x` then run) |
-| `CloneBins-0.1.3-archlinux-x86_64.pkg.tar.zst` | Arch (`sudo pacman -U`) |
-| `CloneBins-0.1.3-windows-x64-setup.exe` | Windows 10/11 NSIS |
-| `CloneBins-0.1.3-windows-x64.zip` | Windows portable zip |
+| `CloneBins-0.1.4-ubuntu-amd64.deb` | Ubuntu / Debian (`sudo apt install ./…deb`) |
+| `CloneBins-0.1.4-linux-x64.AppImage` | Generic glibc (`chmod +x` then run) |
+| `CloneBins-0.1.4-archlinux-x86_64.pkg.tar.zst` | Arch (`sudo pacman -U`) |
+| `CloneBins-0.1.4-windows-x64-setup.exe` | Windows 10/11 NSIS |
+| `CloneBins-0.1.4-windows-x64.zip` | Windows portable zip |
 
 Ubuntu and Arch packages are the Tauri window plus a frozen `clonebins-api`
 sidecar in `/usr/bin`.
@@ -94,7 +94,7 @@ sidecar in `dist/clonebins-api`):
 apps/desktop/scripts/package-linux.sh deb \
   --desktop apps/desktop/src-tauri/target/release/clonebins-desktop \
   --api dist/clonebins-api \
-  --out dist/release/CloneBins-0.1.3-ubuntu-amd64.deb
+  --out dist/release/CloneBins-0.1.4-ubuntu-amd64.deb
 ```
 
 `arch` mode writes `.pkg.tar.zst`. See `.github/workflows/release-linux.yml`.
@@ -139,7 +139,7 @@ PyInstaller fail with `IncompatibleBinaryArchError`.
 
 ### Optional Apple signing secrets
 
-Not required for the unsigned v0.1.3 DMGs. Add these GitHub Actions secrets
+Not required for the unsigned v0.1.4 DMGs. Add these GitHub Actions secrets
 only if you want CI to Developer ID sign and notarize later:
 
 | Secret | Purpose |
@@ -155,7 +155,7 @@ only if you want CI to Developer ID sign and notarize later:
 | `APPLE_API_ISSUER` | Issuer UUID |
 
 Until those exist, “Release macOS DMG” keeps producing unsigned / ad-hoc
-DMGs and attaches them to the tag (`workflow_dispatch` with `tag=v0.1.3`
+DMGs and attaches them to the tag (`workflow_dispatch` with `tag=v0.1.4`
 rebuilds the same release).
 
 ### Windows
@@ -177,4 +177,10 @@ See `.github/workflows/release-windows.yml`.
 ## Privacy
 
 The sidecar binds **loopback only**. Images never leave the machine. Face
-weights, if used, are the same `~/.cache/clonebins/models` files as the CLI.
+weights live in `~/.cache/clonebins/models` (the same cache as the CLI).
+Release builds bake the seven ONNX files into the app
+(`Contents/Resources/models` on macOS, `/usr/share/clonebins/models` on Linux,
+`models/` next to the exe on Windows). The sidecar sets `CLONEBINS_BUNDLED_MODELS`
+so Verify can copy those into the cache and download only files that are still
+missing. CI downloads the weights with `scripts/fetch-bundled-models.sh`; they
+are not committed.

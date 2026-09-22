@@ -7,6 +7,7 @@ import subprocess
 import sys
 import threading
 import uuid
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
@@ -30,19 +31,42 @@ from clonebins_api.schemas import (
 from clonebins_api.shares import ShareError, ShareSpec, probe_share
 from clonebins_core.models import (
     INSTALL_COMMAND,
+    bundled_models_dirs,
     catalog_status,
+    copy_bundled_into_cache,
     curl_install_script,
     default_models_dir,
     download_missing_face_models,
     missing_model_specs,
     models_present,
     user_home,
+    verify_and_fill_face_models,
 )
+
+@asynccontextmanager
+async def _lifespan(_app: FastAPI):
+    """First launch: copy ONNX weights baked into the app into the user cache.
+
+    Network download stays on Verify / Download so startup does not block on
+    Hugging Face. Gaps are filled later by those endpoints.
+    """
+    try:
+        copied = copy_bundled_into_cache()
+        if copied:
+            print(
+                f"Seeded {len(copied)} baked ONNX file(s) into {default_models_dir()}",
+                flush=True,
+            )
+    except Exception as exc:
+        print(f"Baked model seed skipped: {exc}", flush=True)
+    yield
+
 
 app = FastAPI(
     title="CloneBins API",
     version=__version__,
     description="Local clustering API. Images stay on this machine.",
+    lifespan=_lifespan,
 )
 
 app.add_middleware(
@@ -146,17 +170,43 @@ def models_status() -> dict:
     return _models_payload()
 
 
+@app.post("/api/models/verify")
+def models_verify(body: ModelDownloadRequest | None = None) -> dict:
+    """Check the cache, copy baked ONNX files, then download only what is missing.
+
+    Poll GET /api/models/download/{id} for logs (same task store as Download).
+    """
+    payload = body or ModelDownloadRequest()
+    task = _ModelTask()
+    with _model_tasks_lock:
+        _model_tasks[task.id] = task
+    thread = threading.Thread(
+        target=_run_model_download,
+        args=(task, payload),
+        kwargs={"via": "verify"},
+        daemon=True,
+    )
+    thread.start()
+    return task.snapshot()
+
+
 @app.post("/api/models/download")
 def models_download(body: ModelDownloadRequest) -> dict:
-    """Download YuNet/SFace ONNX files. Always starts; Verify is not required.
+    """Fill the cache from baked models, then download only still-missing files.
 
-    Poll GET /api/models/download/{id} for logs. Uses urllib+certifi, then
-    system curl if the frozen sidecar cannot complete TLS.
+    Always starts; Verify is not required. Poll GET /api/models/download/{id}.
+    Uses urllib+certifi, then system curl if the frozen sidecar cannot complete TLS.
+    ``force`` re-fetches every catalog file.
     """
     task = _ModelTask()
     with _model_tasks_lock:
         _model_tasks[task.id] = task
-    thread = threading.Thread(target=_run_model_download, args=(task, body), daemon=True)
+    thread = threading.Thread(
+        target=_run_model_download,
+        args=(task, body),
+        kwargs={"via": "download"},
+        daemon=True,
+    )
     thread.start()
     return task.snapshot()
 
@@ -194,40 +244,53 @@ def models_download_status(task_id: str) -> dict:
     return task.snapshot()
 
 
-def _run_model_download(task: _ModelTask, body: ModelDownloadRequest) -> None:
+def _run_model_download(task: _ModelTask, body: ModelDownloadRequest, via: str = "download") -> None:
     directory = default_models_dir()
+    if via == "verify":
+        task.log(
+            "Verify: check cache, copy models baked into the app, "
+            "download only files that are still missing."
+        )
+    else:
+        task.log(
+            "Download: copy models baked into the app, "
+            "then fetch only files that are still missing."
+        )
     catalog = catalog_status(directory)
-    missing = missing_model_specs(directory)
     task.log(f"Cache {directory} (home {catalog['home']})")
+    baked_dirs = [str(path) for path in bundled_models_dirs() if path.is_dir()]
+    task.log("Baked dirs: " + (", ".join(baked_dirs) if baked_dirs else "(none)"))
     expected = catalog["expected"]
     n_yunet = catalog["yunet_count"]
     n_sface = catalog["sface_count"]
     task.log(f"Catalog {expected} ONNX files ({n_yunet} YuNet + {n_sface} SFace)")
     for family in ("yunet", "sface"):
         for item in catalog[family]:
-            mark = "ready" if item["ready"] else "MISSING"
+            if item["ready"]:
+                mark = "ready"
+            elif item.get("bundled"):
+                mark = "baked"
+            else:
+                mark = "MISSING"
             task.log(f"  {family} {item['id']}: {mark}  {item['filename']}")
-    if not missing and not body.force:
-        task.log("Every catalogued YuNet / SFace file is already present.")
-        task.log("Nothing to download. Use force to re-fetch.")
-        task.log(f"CLI fallback: {INSTALL_COMMAND}")
-        with task.lock:
-            task.status = "done"
-        return
     if body.force:
         task.log("Force: re-downloading catalog files even if they look valid.")
-    if missing:
-        names = ", ".join(item["filename"] for item in missing)
-        task.log(f"Missing {len(missing)} file(s): {names}")
     try:
-        download_missing_face_models(
-            models_dir=directory,
-            log=task.log,
-            all_variants=body.all_variants,
-            force=body.force,
-            yunet_id=body.yunet,
-            sface_id=body.sface,
-        )
+        if via == "verify":
+            verify_and_fill_face_models(
+                models_dir=directory,
+                log=task.log,
+                force=body.force,
+            )
+        else:
+            download_missing_face_models(
+                models_dir=directory,
+                log=task.log,
+                all_variants=body.all_variants,
+                force=body.force,
+                yunet_id=body.yunet,
+                sface_id=body.sface,
+            )
         leftover = missing_model_specs(directory)
         if leftover:
             task.log("Still missing: " + ", ".join(item["filename"] for item in leftover))

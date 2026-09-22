@@ -31,11 +31,23 @@ def test_models_status_and_verify(tmp_path, monkeypatch):
     help_text = visible_help(download_help.stdout)
     assert "--force" in help_text
     assert "--all" in help_text
+    calls: list[str] = []
+
+    def fake_download(urls, dest, min_bytes, log=None):
+        calls.append(dest.name)
+        dest.write_bytes(b"x" * (min_bytes + 8))
+
+    monkeypatch.setattr("clonebins_core.models._download_first_ok", fake_download)
     verify = runner.invoke(app, ["models", "verify"])
-    assert verify.exit_code == 1
-    assert "missing" in verify.stdout
-    assert "2026may" in verify.stdout
-    assert "face_detection_yunet" in verify.stdout or "yunet" in verify.stdout
+    assert verify.exit_code == 0, verify.stdout + verify.stderr
+    output = verify.stdout + verify.stderr
+    assert "2026may" in output
+    assert "yunet" in output.lower() or "face_detection_yunet" in output
+    assert len(calls) == 7
+    assert all((tmp_path / name).is_file() for name in calls)
+    again = runner.invoke(app, ["models", "verify"])
+    assert again.exit_code == 0
+    assert len(calls) == 7
 
 
 def test_cli_download_force_writes_all_seven(tmp_path, monkeypatch):

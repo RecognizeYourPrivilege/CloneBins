@@ -85,6 +85,7 @@ export type ModelSpec = {
   label: string;
   notes: string;
   ready: boolean;
+  bundled?: boolean;
   bytes: number;
   family?: string;
   path?: string;

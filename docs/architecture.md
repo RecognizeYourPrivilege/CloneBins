@@ -72,8 +72,11 @@ IP with `CLONEBINS_API_HOST=0.0.0.0`). It does not embed faces on-device in v1.
   on your LAN — still not the public internet.
 - Runtime does not need the network **after** YuNet + SFace weights are on disk
   (`~/.cache/clonebins/models`, overridable with `CLONEBINS_MODELS_DIR`).
-- First-time `clonebins models download` (or the first cluster run with model
-  download enabled) fetches those two ONNX files. Appearance-only
+- Packaged apps bake all seven ONNX files into the bundle (macOS
+  `Contents/Resources/models`, Linux `/usr/share/clonebins/models`, Windows
+  `models/` next to the exe, Docker `/opt/clonebins/models`). First launch
+  copies those into the user cache. **Verify** (`POST /api/models/verify`) and
+  **Download** then fetch only files that are still missing. Appearance-only
   `face+body` works with no models at all.
 
 ## Clustering behavior
@@ -88,9 +91,10 @@ IP with `CLONEBINS_API_HOST=0.0.0.0`). It does not embed faces on-device in v1.
   so a late-discovered face dimension cannot emit mixed row lengths.
 - Network shares (SMB / SFTP / FTP) are an API I/O step: list/copy images into
   the job cache, then `run_pipeline()` as usual. Credentials are not logged.
-- Face-model **Verify** is `GET /api/models/status` (best-effort). **Download**
-  is `POST /api/models/download` and is not gated on Verify (poll
-  `GET /api/models/download/{id}`). CLI: `clonebins models download --force`.
+- Face-model **Verify** is `POST /api/models/verify`: cache, copy baked weights,
+  download only gaps. **Download** is `POST /api/models/download` (same fill,
+  not gated on Verify). Poll `GET /api/models/download/{id}` for either task.
+  `GET /api/models/status` is read-only. CLI: `clonebins models verify`.
   Open folder: `POST /api/models/open-folder`.
 - Web zip export: bins start unchecked; include individually or via Include all.
 - Detector/recognizer: YuNet 2023 FP32 / INT8 / INT8-BQ and SFace 2021 FP32 /
