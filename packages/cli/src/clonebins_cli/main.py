@@ -116,7 +116,7 @@ def version() -> None:
     try:
         console.print(pkg_version("clonebins"))
     except PackageNotFoundError:
-        console.print("0.1.4")
+        console.print("1.0.0")
 
 
 @app.command()

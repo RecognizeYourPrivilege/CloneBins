@@ -3,7 +3,7 @@
 Cluster AI-generated images by **face** and **body/identity**, then drop each
 identity into its own folder for LoRA training datasets.
 
-v0.1.4 is a local CLI, a local web UI, a Tauri 2 desktop shell, an iOS SwiftUI
+v1.0.0 is a local CLI, a local web UI, a Tauri 2 desktop shell, an iOS SwiftUI
 client, and a shared Python core. Desktop installers ship all seven YuNet +
 SFace ONNX files inside the app. On first launch the sidecar copies any missing
 weights into `~/.cache/clonebins/models`. There is no models screen in the UI.
@@ -347,13 +347,13 @@ GitHub Actions publishes Linux, macOS, and Windows installers on
 
 | File | Platform |
 | --- | --- |
-| `CloneBins-0.1.4-macos-arm64.dmg` | Apple Silicon (unsigned / ad-hoc signed) |
-| `CloneBins-0.1.4-macos-x64.dmg` | Intel Mac (unsigned / ad-hoc signed) |
-| `CloneBins-0.1.4-ubuntu-amd64.deb` | Ubuntu / Debian |
-| `CloneBins-0.1.4-linux-x64.AppImage` | Generic glibc Linux |
-| `CloneBins-0.1.4-archlinux-x86_64.pkg.tar.zst` | Arch |
-| `CloneBins-0.1.4-windows-x64-setup.exe` | Windows 10/11 NSIS (current user) |
-| `CloneBins-0.1.4-windows-x64.zip` | Windows portable (`CloneBins.exe` + `clonebins-api.exe`) |
+| `CloneBins-1.0.0-macos-arm64.dmg` | Apple Silicon (unsigned / ad-hoc signed) |
+| `CloneBins-1.0.0-macos-x64.dmg` | Intel Mac (unsigned / ad-hoc signed) |
+| `CloneBins-1.0.0-ubuntu-amd64.deb` | Ubuntu / Debian |
+| `CloneBins-1.0.0-linux-x64.AppImage` | Generic glibc Linux |
+| `CloneBins-1.0.0-archlinux-x86_64.pkg.tar.zst` | Arch |
+| `CloneBins-1.0.0-windows-x64-setup.exe` | Windows 10/11 NSIS (current user) |
+| `CloneBins-1.0.0-windows-x64.zip` | Windows portable (`CloneBins.exe` + `clonebins-api.exe`) |
 
 macOS DMGs are **unsigned / ad-hoc signed**, not notarized — see
 [apps/desktop/README.md](apps/desktop/README.md) (optional Apple secrets).

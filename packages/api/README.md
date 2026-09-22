@@ -15,7 +15,7 @@ process. There is no cloud account.
 Bind `127.0.0.1` (default) for web/desktop/Simulator. For a physical iPhone on
 the same Wi-Fi: `CLONEBINS_API_HOST=0.0.0.0 clonebins-api`.
 
-v0.1.4: startup copies ONNX files baked into the app into
+v1.0.0: startup copies ONNX files baked into the app into
 `~/.cache/clonebins/models` (or `CLONEBINS_MODELS_DIR`) and does not download.
 `GET /api/models` and `GET /api/models/status` are read-only. There is no
 Verify, Download, open-folder, or install-command endpoint. Share passwords
