@@ -16,6 +16,7 @@ DESKTOP_EXE=""
 API_EXE=""
 INSTALLER=""
 OUT=""
+MODELS_DIR=""
 EXTRAS=()
 
 while [[ $# -gt 0 ]]; do
@@ -24,6 +25,7 @@ while [[ $# -gt 0 ]]; do
     --api) API_EXE="${2:?}"; shift 2 ;;
     --installer) INSTALLER="${2:?}"; shift 2 ;;
     --extra) EXTRAS+=("${2:?}"); shift 2 ;;
+    --models) MODELS_DIR="${2:?}"; shift 2 ;;
     --out) OUT="${2:?}"; shift 2 ;;
     *) echo "unknown arg: $1" >&2; exit 1 ;;
   esac
@@ -67,6 +69,12 @@ write_zip() {
     need_file "$extra" "extra file"
     extra_args+=("$extra")
   done
+  local models=""
+  if [[ -n "$MODELS_DIR" ]]; then
+    models="$(abspath "$MODELS_DIR")"
+  else
+    models="$ROOT/apps/desktop/resources/models"
+  fi
   PYTHON_BIN="${PYTHON:-}"
   if [[ -z "$PYTHON_BIN" ]]; then
     if command -v python3 >/dev/null 2>&1; then
@@ -75,7 +83,7 @@ write_zip() {
       PYTHON_BIN=python
     fi
   fi
-  "$PYTHON_BIN" - "$OUT" "$DESKTOP_EXE" "$API_EXE" "${extra_args[@]}" <<'PY'
+  "$PYTHON_BIN" - "$OUT" "$DESKTOP_EXE" "$API_EXE" "$models" "${extra_args[@]}" <<'PY'
 import sys
 import zipfile
 from pathlib import Path
@@ -83,18 +91,24 @@ from pathlib import Path
 out = Path(sys.argv[1])
 desktop = Path(sys.argv[2])
 api = Path(sys.argv[3])
-extras = [Path(p) for p in sys.argv[4:]]
+models = Path(sys.argv[4])
+extras = [Path(p) for p in sys.argv[5:]]
 out.parent.mkdir(parents=True, exist_ok=True)
+onnx = sorted(models.glob("*.onnx")) if models.is_dir() else []
 with zipfile.ZipFile(out, "w", compression=zipfile.ZIP_DEFLATED) as zf:
     zf.write(desktop, "CloneBins/CloneBins.exe")
     zf.write(api, "CloneBins/clonebins-api.exe")
     for extra in extras:
         zf.write(extra, f"CloneBins/{extra.name}")
+    for weight in onnx:
+        zf.write(weight, f"CloneBins/models/{weight.name}")
 print(f"Wrote {out}")
 print(f"  CloneBins/CloneBins.exe <- {desktop}")
 print(f"  CloneBins/clonebins-api.exe <- {api}")
 for extra in extras:
     print(f"  CloneBins/{extra.name} <- {extra}")
+for weight in onnx:
+    print(f"  CloneBins/models/{weight.name} <- {weight}")
 PY
   ls -lh "$OUT"
 }

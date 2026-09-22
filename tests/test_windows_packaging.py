@@ -24,6 +24,9 @@ def test_package_windows_zip_and_nsis(tmp_path: Path) -> None:
     api.write_bytes(b"MZ-api")
     loader.write_bytes(b"MZ-webview")
     installer.write_bytes(b"MZ-nsis")
+    models = tmp_path / "models"
+    models.mkdir()
+    (models / "face_detection_yunet_2023mar.onnx").write_bytes(b"onnx-yunet")
 
     out_zip = tmp_path / "CloneBins-0.1.1-windows-x64.zip"
     _run(
@@ -37,6 +40,8 @@ def test_package_windows_zip_and_nsis(tmp_path: Path) -> None:
             str(api),
             "--extra",
             str(loader),
+            "--models",
+            str(models),
             "--out",
             str(out_zip),
         ]
@@ -47,6 +52,8 @@ def test_package_windows_zip_and_nsis(tmp_path: Path) -> None:
         assert "CloneBins/CloneBins.exe" in names
         assert "CloneBins/clonebins-api.exe" in names
         assert "CloneBins/WebView2Loader.dll" in names
+        assert "CloneBins/models/face_detection_yunet_2023mar.onnx" in names
+        assert zf.read("CloneBins/models/face_detection_yunet_2023mar.onnx") == b"onnx-yunet"
         assert zf.read("CloneBins/CloneBins.exe") == b"MZ-desktop"
         assert zf.read("CloneBins/clonebins-api.exe") == b"MZ-api"
 

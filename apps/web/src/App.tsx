@@ -45,7 +45,7 @@ export default function App() {
   const [selectedImages, setSelectedImages] = useState<Set<string>>(new Set());
   const [share, setShare] = useState<ShareRequest>(EMPTY_SHARE);
   const [modelLog, setModelLog] = useState<string[]>([
-    "Face models stay on this machine. Download is always available — Verify is optional status.",
+    "Face models ship inside the desktop app. Verify copies them into the cache and downloads only missing files.",
     "CLI fallback: clonebins models download --force",
   ]);
   const [modelTask, setModelTask] = useState<ModelDownloadTask | null>(null);
@@ -178,63 +178,31 @@ export default function App() {
   }
 
   async function onVerifyModels() {
-    setBusy(true);
     setError(null);
+    setModelLog([
+      "Verify: checking cache, copying baked models, downloading only missing files…",
+    ]);
     try {
-      const status = await api.getModelStatus();
-      const yunet = status.yunet ?? [];
-      const sface = status.sface ?? [];
-      const expected = status.expected ?? yunet.length + sface.length;
-      const lines = [
-        `Verify · cache ${status.models_dir}`,
-        status.home ? `Home ${status.home}` : "",
-        `Expected ${expected} ONNX files (${yunet.length} YuNet + ${sface.length} SFace)`,
-        ...yunet.map(
-          (spec) =>
-            `  YuNet ${spec.id}: ${spec.ready ? "ready" : "MISSING"}  ${spec.filename}${spec.ready ? `  ${spec.bytes} B` : ""}`,
-        ),
-        ...sface.map(
-          (spec) =>
-            `  SFace ${spec.id}: ${spec.ready ? "ready" : "MISSING"}  ${spec.filename}${spec.ready ? `  ${spec.bytes} B` : ""}`,
-        ),
-      ].filter(Boolean);
-      if (status.missing_count === 0) {
-        lines.push("All 7 opencv_zoo ONNX files are present. Download can re-check or leave them.");
-      } else {
-        lines.push(
-          `${status.missing_count} missing — click Download (always enabled) to fetch them.`,
-        );
-      }
-      lines.push("CLI fallback: clonebins models download --force");
-      setModelLog(lines);
-      setModelsDir(status.models_dir);
-      setHealth((prev) =>
-        prev
-          ? {
-              ...prev,
-              models_ready: status.ready,
-              models_dir: status.models_dir,
-              models: {
-                models_dir: status.models_dir,
-                yunet: status.yunet,
-                sface: status.sface,
-                default_yunet: status.default_yunet,
-                default_sface: status.default_sface,
-              },
-            }
-          : prev,
-      );
+      const task = await api.startModelVerify(settings);
+      setModelTask(task);
+      setModelLog(task.logs.length ? task.logs : ["Verifying…"]);
+      if (task.models_dir) setModelsDir(task.models_dir);
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-      setModelLog((prev) => [...prev, `Verify failed: ${err instanceof Error ? err.message : String(err)}`]);
-    } finally {
-      setBusy(false);
+      const message = err instanceof Error ? err.message : String(err);
+      setError(message);
+      setModelLog((prev) => [
+        ...prev,
+        `Verify failed: ${message}`,
+        "CLI fallback: clonebins models verify",
+      ]);
     }
   }
 
   async function onDownloadModels() {
     setError(null);
-    setModelLog(["Starting download of all 7 ONNX files… Verify is not required."]);
+    setModelLog([
+      "Download: copying baked models, then fetching only files still missing. Verify is not required.",
+    ]);
     try {
       const task = await api.startModelDownload(settings, { force: false });
       setModelTask(task);
@@ -464,9 +432,9 @@ export default function App() {
             <span className="step">02</span> Face models
           </h2>
           <p className="hint">
-            Download is always enabled and writes all 7 ONNX files to{" "}
-            <code>{modelsDir}</code>. Verify is optional status. Terminal fallback:{" "}
-            <code>clonebins models download --force</code>.
+            Download is always enabled. Packaged apps ship all 7 ONNX files. Verify checks{" "}
+            <code>{modelsDir}</code>, copies models baked into the app, then downloads only what is
+            still missing. Terminal fallback: <code>clonebins models download --force</code>.
           </p>
           <div className="btn-row">
             <button type="button" className="ghost" disabled={downloadingModels} onClick={() => void onVerifyModels()}>

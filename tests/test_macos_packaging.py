@@ -31,6 +31,11 @@ def test_macos_release_uses_native_intel_runner() -> None:
     assert "hdiutil convert" in pkg
     assert "SIZE_MB" in pkg
     assert "hdiutil create" in pkg
+    assert "Contents/Resources/models" in pkg
+    assert "nobrowse" in pkg
+    assert "run_bounded" in pkg
+    assert "fetch-bundled-models.sh" in text
+    assert "macos-15-intel" in text
     assert all(
         "-srcfolder" not in line or line.lstrip().startswith("#")
         for line in pkg.splitlines()
@@ -70,3 +75,5 @@ def test_sidecar_pins_models_dir_to_user_home() -> None:
     assert 'cmd.env(\n            "CLONEBINS_MODELS_DIR"' in rust or "CLONEBINS_MODELS_DIR" in rust
     assert 'home.join(".cache").join("clonebins").join("models")' in rust
     assert "/Users/{user}" in rust
+    assert "CLONEBINS_BUNDLED_MODELS" in rust
+    assert "fn bundled_models_dir" in rust

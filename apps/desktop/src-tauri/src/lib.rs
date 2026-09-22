@@ -117,16 +117,57 @@ fn spawn_sidecar() -> Result<Child, String> {
 /// an empty or unexpanded HOME; without this, models land outside
 /// `~/.cache/clonebins/models`.
 fn apply_user_cache_env(cmd: &mut Command) {
-    let Some(home) = resolve_login_home() else {
-        return;
-    };
-    cmd.env("HOME", &home);
-    if std::env::var_os("CLONEBINS_MODELS_DIR").is_none() {
-        cmd.env(
-            "CLONEBINS_MODELS_DIR",
-            home.join(".cache").join("clonebins").join("models"),
-        );
+    if let Some(home) = resolve_login_home() {
+        cmd.env("HOME", &home);
+        if std::env::var_os("CLONEBINS_MODELS_DIR").is_none() {
+            cmd.env(
+                "CLONEBINS_MODELS_DIR",
+                home.join(".cache").join("clonebins").join("models"),
+            );
+        }
     }
+    if std::env::var_os("CLONEBINS_BUNDLED_MODELS").is_none() {
+        if let Some(bundled) = bundled_models_dir() {
+            eprintln!("Baked ONNX models at {}", bundled.display());
+            cmd.env("CLONEBINS_BUNDLED_MODELS", bundled);
+        }
+    }
+}
+
+/// ONNX weights shipped inside the app (filled at package time, not by git).
+fn bundled_models_dir() -> Option<PathBuf> {
+    let mut candidates: Vec<PathBuf> = Vec::new();
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(dir) = exe.parent() {
+            candidates.push(dir.join("models"));
+            candidates.push(dir.join("resources").join("models"));
+            if dir.file_name().and_then(|name| name.to_str()) == Some("MacOS") {
+                candidates.push(dir.join("../Resources/models"));
+            }
+        }
+    }
+    if let Ok(appdir) = std::env::var("APPDIR") {
+        if !appdir.is_empty() {
+            let root = PathBuf::from(appdir);
+            candidates.push(root.join("usr/share/clonebins/models"));
+            candidates.push(root.join("usr/lib/clonebins-desktop/models"));
+        }
+    }
+    candidates.push(PathBuf::from("/usr/share/clonebins/models"));
+    candidates.push(PathBuf::from("/usr/lib/clonebins-desktop/models"));
+    candidates.into_iter().find(|path| onnx_dir(path))
+}
+
+fn onnx_dir(path: &std::path::Path) -> bool {
+    let Ok(entries) = std::fs::read_dir(path) else {
+        return false;
+    };
+    entries.flatten().any(|entry| {
+        entry
+            .file_name()
+            .to_string_lossy()
+            .ends_with(".onnx")
+    })
 }
 
 fn resolve_login_home() -> Option<PathBuf> {
