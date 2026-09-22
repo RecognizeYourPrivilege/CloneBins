@@ -31,12 +31,13 @@ on:
       - cursor/macos-models-verify-cb91
       - cursor/macos-models-download-e2c0
       - cursor/bake-models-v014-1384
+      - cursor/remove-models-ui-1384
   workflow_dispatch:
     inputs:
       tag:
-        description: "Release tag to create or reuse (e.g. v0.1.4)"
+        description: "Release tag to create or reuse (e.g. v1.0.0)"
         required: true
-        default: "v0.1.4"
+        default: "v1.0.0"
 
 permissions:
   contents: write
@@ -50,7 +51,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || (startsWith(github.ref, 'refs/tags/') && github.ref_name || 'v0.1.4') }}
+  RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || (startsWith(github.ref, 'refs/tags/') && github.ref_name || 'v1.0.0') }}
 
 jobs:
   macos-dmg:
@@ -222,7 +223,7 @@ jobs:
 
   publish:
     needs: macos-dmg
-    # Do not publish a partial v0.1.4 if one arch failed. `!cancelled()`
+    # Do not publish a partial v1.0.0 if one arch failed. `!cancelled()`
     # used to force this job even when the matrix had a failure.
     if: ${{ !cancelled() && needs.macos-dmg.result == 'success' }}
     runs-on: ubuntu-latest
@@ -267,6 +268,6 @@ jobs:
           prerelease: false
           fail_on_unmatched_files: false
           files: dist/release/*
-          body_path: .github/release-notes-v0.1.4.md
+          body_path: .github/release-notes-v1.0.0.md
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

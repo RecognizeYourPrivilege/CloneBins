@@ -7,7 +7,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
-VERSION="${CLONEBINS_VERSION:-0.1.4}"
+VERSION="${CLONEBINS_VERSION:-1.0.0}"
 ICON_DIR="$ROOT/apps/desktop/src-tauri/icons"
 URL="https://github.com/RecognizeYourPrivilege/CloneBins"
 PKGDESC="Local-first clustering of AI-generated images into LoRA identity bins."

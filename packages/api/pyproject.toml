@@ -1,6 +1,6 @@
 [project]
 name = "clonebins-api"
-version = "0.1.4"
+version = "1.0.0"
 description = "Local FastAPI server wrapping clonebins_core for the web UI."
 readme = "README.md"
 requires-python = ">=3.10"

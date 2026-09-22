@@ -25,10 +25,9 @@ npm run dev
 
 Open http://127.0.0.1:5173 — Vite proxies `/api` to http://127.0.0.1:8765.
 
-**Download** is always enabled and writes all seven YuNet/SFace ONNX files
-(progress in the log box). **Verify** is optional status. **Open models
-folder** / **Copy install command** expose `~/.cache/clonebins/models` and
-`clonebins models download --force`. **Network share** copies SMB/SFTP/FTP
+Face weights ship with the desktop app and Docker image and are copied into
+the cache on startup. The UI has no Verify, Download, or models log. Settings
+still pick the YuNet and SFace variant. **Network share** copies SMB/SFTP/FTP
 images into a local job cache, then clusters them like a folder path.
 
 Bins are **not** in the zip until you tick **in zip** or **Include all in zip**.

@@ -91,32 +91,3 @@ export type ModelSpec = {
   path?: string;
   source?: string;
 };
-
-export type ModelStatus = {
-  models_dir: string;
-  home?: string;
-  yunet: ModelSpec[];
-  sface: ModelSpec[];
-  default_yunet: string;
-  default_sface: string;
-  expected?: number;
-  yunet_count?: number;
-  sface_count?: number;
-  missing: ModelSpec[];
-  missing_count: number;
-  ready: boolean;
-  catalog_ready?: boolean;
-  all_ready?: boolean;
-  install_command?: string;
-  curl_script?: string;
-};
-
-export type ModelDownloadTask = {
-  id: string;
-  status: "running" | "done" | "error";
-  logs: string[];
-  error: string | null;
-  missing: ModelSpec[];
-  missing_count: number;
-  models_dir?: string;
-};

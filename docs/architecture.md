@@ -75,8 +75,8 @@ IP with `CLONEBINS_API_HOST=0.0.0.0`). It does not embed faces on-device in v1.
 - Packaged apps bake all seven ONNX files into the bundle (macOS
   `Contents/Resources/models`, Linux `/usr/share/clonebins/models`, Windows
   `models/` next to the exe, Docker `/opt/clonebins/models`). First launch
-  copies those into the user cache. **Verify** (`POST /api/models/verify`) and
-  **Download** then fetch only files that are still missing. Appearance-only
+  copies those into the user cache on startup and before clustering. There is
+  no models UI. Network download is CLI-only (`clonebins models …`). Appearance-only
   `face+body` works with no models at all.
 
 ## Clustering behavior
@@ -91,11 +91,10 @@ IP with `CLONEBINS_API_HOST=0.0.0.0`). It does not embed faces on-device in v1.
   so a late-discovered face dimension cannot emit mixed row lengths.
 - Network shares (SMB / SFTP / FTP) are an API I/O step: list/copy images into
   the job cache, then `run_pipeline()` as usual. Credentials are not logged.
-- Face-model **Verify** is `POST /api/models/verify`: cache, copy baked weights,
-  download only gaps. **Download** is `POST /api/models/download` (same fill,
-  not gated on Verify). Poll `GET /api/models/download/{id}` for either task.
-  `GET /api/models/status` is read-only. CLI: `clonebins models verify`.
-  Open folder: `POST /api/models/open-folder`.
+- Face weights are seeded silently (`copy_bundled_into_cache` on API startup,
+  and again inside `ensure_face_models` before clustering). `GET /api/models`
+  and `GET /api/models/status` are read-only. The old Verify / Download /
+  open-folder / install-command endpoints are gone. CLI: `clonebins models verify`.
 - Web zip export: bins start unchecked; include individually or via Include all.
 - Detector/recognizer: YuNet 2023 FP32 / INT8 / INT8-BQ and SFace 2021 FP32 /
   INT8 / INT8-BQ plus YuNet `2026may` from opencv_zoo (Hugging Face mirrors). Docker bakes all seven.
