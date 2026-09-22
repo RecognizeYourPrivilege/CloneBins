@@ -5,7 +5,7 @@ Local-first identity bins for LoRA datasets. Processing stays on the machine tha
 ## What’s new
 
 - **Models ship with the app.** All seven YuNet + SFace ONNX files are baked into the desktop installers (and the Docker image). A fresh install already has them.
-- **Verify downloads only what is missing.** It checks `~/.cache/clonebins/models`, copies baked weights into that cache, then uses the network only for files that are still absent. **Download** stays enabled and does the same fill.
+- **No Face models screen.** The app does not ask you to Verify or Download weights. On first launch it copies baked files into `~/.cache/clonebins/models` when they are missing. Settings still choose the YuNet and SFace variant.
 - **macOS Intel DMG** is built on native `macos-15-intel` (not Rosetta), with an isolated venv, explicit PyInstaller `--target-arch`, and a larger DMG so the Intel job does not hang on a full disk image.
 
 ## Where weights live
@@ -17,7 +17,7 @@ Local-first identity bins for LoRA datasets. Processing stays on the machine tha
 | Linux packages | `/usr/share/clonebins/models/` |
 | Windows | `models/` next to `CloneBins.exe` |
 
-Terminal: `clonebins models verify` (gaps only) or `clonebins models download --force`.
+There is no models UI. Power users: `clonebins models verify` (copy baked files, then download only gaps) or `clonebins models download --force`.
 
 ## Installers
 

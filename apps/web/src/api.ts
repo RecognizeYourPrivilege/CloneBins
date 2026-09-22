@@ -1,11 +1,4 @@
-import type {
-  ClusterSettings,
-  Health,
-  Job,
-  ModelDownloadTask,
-  ModelStatus,
-  ShareRequest,
-} from "./types";
+import type { ClusterSettings, Health, Job, ShareRequest } from "./types";
 
 function isTauriRuntime(): boolean {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
@@ -170,64 +163,6 @@ function sharePayload(share: ShareRequest): Record<string, unknown> {
     private_key: share.private_key.trim() || null,
     port: Number.isFinite(port) ? port : null,
   };
-}
-
-export async function getModelStatus(): Promise<ModelStatus> {
-  return parse<ModelStatus>(await fetch(apiUrl("/api/models/status")));
-}
-
-function modelFillBody(settings: ClusterSettings, force: boolean): string {
-  return JSON.stringify({
-    yunet: settings.yunet,
-    sface: settings.sface,
-    all_variants: true,
-    force,
-  });
-}
-
-export async function startModelVerify(settings: ClusterSettings): Promise<ModelDownloadTask> {
-  return parse<ModelDownloadTask>(
-    await fetch(apiUrl("/api/models/verify"), {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: modelFillBody(settings, false),
-    }),
-  );
-}
-
-export async function startModelDownload(
-  settings: ClusterSettings,
-  options: { force?: boolean } = {},
-): Promise<ModelDownloadTask> {
-  return parse<ModelDownloadTask>(
-    await fetch(apiUrl("/api/models/download"), {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: modelFillBody(settings, Boolean(options.force)),
-    }),
-  );
-}
-
-export async function getModelDownload(id: string): Promise<ModelDownloadTask> {
-  return parse<ModelDownloadTask>(await fetch(apiUrl(`/api/models/download/${id}`)));
-}
-
-export async function getInstallCommand(): Promise<{
-  command: string;
-  models_dir: string;
-  home: string;
-  curl_script: string;
-}> {
-  return parse(await fetch(apiUrl("/api/models/install-command")));
-}
-
-export async function openModelsFolder(): Promise<{
-  ok: boolean;
-  models_dir: string;
-  home: string;
-  command: string;
-}> {
-  return parse(await fetch(apiUrl("/api/models/open-folder"), { method: "POST" }));
 }
 
 export async function probeShare(share: ShareRequest): Promise<{ ok: boolean; location: string; images: number }> {

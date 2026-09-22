@@ -31,7 +31,7 @@ from pathlib import Path
 ENV_MODELS_DIR = "CLONEBINS_MODELS_DIR"
 ENV_BUNDLED_MODELS = "CLONEBINS_BUNDLED_MODELS"
 INSTALL_COMMAND = "clonebins models download --force"
-USER_AGENT = "CloneBins/0.1.4 (local dataset clustering)"
+USER_AGENT = "CloneBins/1.0.0 (local dataset clustering)"
 
 HF_YUNET = "https://huggingface.co/opencv/face_detection_yunet/resolve/main"
 HF_SFACE = "https://huggingface.co/opencv/face_recognition_sface/resolve/main"

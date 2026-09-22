@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import * as api from "./api";
 import { isTauriRuntime, pickDirectory } from "./desktop";
 import type {
@@ -7,7 +7,6 @@ import type {
   Job,
   JobCluster,
   JobImage,
-  ModelDownloadTask,
   ShareProtocol,
   ShareRequest,
 } from "./types";
@@ -44,13 +43,7 @@ export default function App() {
   const [selectedClusters, setSelectedClusters] = useState<Set<string>>(new Set());
   const [selectedImages, setSelectedImages] = useState<Set<string>>(new Set());
   const [share, setShare] = useState<ShareRequest>(EMPTY_SHARE);
-  const [modelLog, setModelLog] = useState<string[]>([
-    "Face models ship inside the desktop app. Verify copies them into the cache and downloads only missing files.",
-    "CLI fallback: clonebins models download --force",
-  ]);
-  const [modelTask, setModelTask] = useState<ModelDownloadTask | null>(null);
-  const [modelsDir, setModelsDir] = useState("~/.cache/clonebins/models");
-  const logBox = useRef<HTMLPreElement | null>(null);
+  const [shareNote, setShareNote] = useState<string | null>(null);
 
   useEffect(() => {
     setDesktop(isTauriRuntime());
@@ -67,28 +60,6 @@ export default function App() {
     }, 280);
     return () => window.clearInterval(timer);
   }, [job]);
-
-  useEffect(() => {
-    if (!modelTask || modelTask.status !== "running") return;
-    const timer = window.setInterval(() => {
-      api
-        .getModelDownload(modelTask.id)
-        .then((next) => {
-          setModelTask(next);
-          setModelLog(next.logs.length ? next.logs : ["Downloading…"]);
-          if (next.models_dir) setModelsDir(next.models_dir);
-          if (next.status === "done" || next.status === "error") {
-            void api.getHealth().then(setHealth).catch(() => undefined);
-          }
-        })
-        .catch((err: Error) => setError(err.message));
-    }, 320);
-    return () => window.clearInterval(timer);
-  }, [modelTask]);
-
-  useEffect(() => {
-    if (logBox.current) logBox.current.scrollTop = logBox.current.scrollHeight;
-  }, [modelLog]);
 
   const imagesById = useMemo(() => {
     const map = new Map<string, JobImage>();
@@ -142,10 +113,7 @@ export default function App() {
     setError(null);
     try {
       const result = await api.probeShare(share);
-      setModelLog((prev) => [
-        ...prev,
-        `Share probe ${result.location}: ${result.images} image(s). Credentials were not stored.`,
-      ]);
+      setShareNote(`Share probe ${result.location}: ${result.images} image(s). Credentials were not stored.`);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -177,77 +145,6 @@ export default function App() {
     await run(api.startCluster(job.id, settings));
   }
 
-  async function onVerifyModels() {
-    setError(null);
-    setModelLog([
-      "Verify: checking cache, copying baked models, downloading only missing files…",
-    ]);
-    try {
-      const task = await api.startModelVerify(settings);
-      setModelTask(task);
-      setModelLog(task.logs.length ? task.logs : ["Verifying…"]);
-      if (task.models_dir) setModelsDir(task.models_dir);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      setError(message);
-      setModelLog((prev) => [
-        ...prev,
-        `Verify failed: ${message}`,
-        "CLI fallback: clonebins models verify",
-      ]);
-    }
-  }
-
-  async function onDownloadModels() {
-    setError(null);
-    setModelLog([
-      "Download: copying baked models, then fetching only files still missing. Verify is not required.",
-    ]);
-    try {
-      const task = await api.startModelDownload(settings, { force: false });
-      setModelTask(task);
-      setModelLog(task.logs.length ? task.logs : ["Downloading…"]);
-      if (task.models_dir) setModelsDir(task.models_dir);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      setError(message);
-      setModelLog((prev) => [
-        ...prev,
-        `Download failed: ${message}`,
-        "CLI fallback: clonebins models download --force",
-      ]);
-    }
-  }
-
-  async function onOpenModelsFolder() {
-    setError(null);
-    try {
-      const result = await api.openModelsFolder();
-      setModelsDir(result.models_dir);
-      setModelLog((prev) => [
-        ...prev,
-        `Models folder: ${result.models_dir}`,
-        result.ok ? "Opened in Finder / file manager." : "Could not open the folder automatically.",
-      ]);
-    } catch (err) {
-      setModelLog((prev) => [
-        ...prev,
-        `Open folder failed: ${err instanceof Error ? err.message : String(err)}`,
-        `Path: ${modelsDir}`,
-      ]);
-    }
-  }
-
-  async function onCopyInstallCommand() {
-    const command = "clonebins models download --force";
-    try {
-      await navigator.clipboard.writeText(command);
-      setModelLog((prev) => [...prev, `Copied: ${command}`]);
-    } catch {
-      setModelLog((prev) => [...prev, `Install command: ${command}`]);
-    }
-  }
-
   function toggleCluster(id: string) {
     setSelectedClusters((prev) => {
       const next = new Set(prev);
@@ -267,7 +164,6 @@ export default function App() {
   }
 
   const clustering = job?.status === "clustering";
-  const downloadingModels = modelTask?.status === "running";
   const anyIncluded = Boolean(job?.clusters.some((c) => c.included));
   const progress = job?.progress;
   const pct =
@@ -276,7 +172,6 @@ export default function App() {
       : clustering
         ? 15
         : 0;
-  const downloadEnabled = !downloadingModels;
 
   return (
     <div className="page">
@@ -296,9 +191,7 @@ export default function App() {
       {health && (
         <p className="health">
           API v{health.version}
-          {health.models_ready
-            ? " · face models ready"
-            : " · appearance fallback until YuNet/SFace are downloaded"}
+          {health.models_ready ? " · face models ready" : " · appearance fallback"}
         </p>
       )}
 
@@ -427,35 +320,10 @@ export default function App() {
               Cache &amp; cluster
             </button>
           </div>
+          {shareNote && <p className="hint">{shareNote}</p>}
 
           <h2>
-            <span className="step">02</span> Face models
-          </h2>
-          <p className="hint">
-            Download is always enabled. Packaged apps ship all 7 ONNX files. Verify checks{" "}
-            <code>{modelsDir}</code>, copies models baked into the app, then downloads only what is
-            still missing. Terminal fallback: <code>clonebins models download --force</code>.
-          </p>
-          <div className="btn-row">
-            <button type="button" className="ghost" disabled={downloadingModels} onClick={() => void onVerifyModels()}>
-              Verify
-            </button>
-            <button type="button" disabled={!downloadEnabled} onClick={() => void onDownloadModels()}>
-              Download
-            </button>
-            <button type="button" className="ghost" disabled={downloadingModels} onClick={() => void onOpenModelsFolder()}>
-              Open models folder
-            </button>
-            <button type="button" className="ghost" disabled={downloadingModels} onClick={() => void onCopyInstallCommand()}>
-              Copy install command
-            </button>
-          </div>
-          <pre className="logbox" ref={logBox} role="log" aria-live="polite">
-            {modelLog.join("\n")}
-          </pre>
-
-          <h2>
-            <span className="step">03</span> Settings
+            <span className="step">02</span> Settings
           </h2>
           <label className="field">
             Mode
@@ -485,7 +353,6 @@ export default function App() {
               ]).map((spec) => (
                 <option key={spec.id} value={spec.id}>
                   {spec.label}
-                  {"ready" in spec && spec.ready === false ? " (not downloaded)" : ""}
                 </option>
               ))}
             </select>
@@ -505,7 +372,6 @@ export default function App() {
               ]).map((spec) => (
                 <option key={spec.id} value={spec.id}>
                   {spec.label}
-                  {"ready" in spec && spec.ready === false ? " (not downloaded)" : ""}
                 </option>
               ))}
             </select>
@@ -554,7 +420,7 @@ export default function App() {
         <main className="panel results">
           <div className="results-head">
             <h2>
-              <span className="step">04</span> Bins
+              <span className="step">03</span> Bins
             </h2>
             <div className="actions">
               <button
