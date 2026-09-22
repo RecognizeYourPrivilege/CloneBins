@@ -32,7 +32,7 @@ def test_health():
     assert body["privacy"] == "local"
 
 
-def test_models_status_and_download_skips_present(tmp_path, monkeypatch):
+def test_models_status_is_read_only(tmp_path, monkeypatch):
     monkeypatch.setenv("CLONEBINS_MODELS_DIR", str(tmp_path))
     status = client.get("/api/models/status")
     assert status.status_code == 200, status.text
@@ -50,56 +50,19 @@ def test_models_status_and_download_skips_present(tmp_path, monkeypatch):
         "face_recognition_sface_2021dec_int8.onnx",
         "face_recognition_sface_2021dec_int8bq.onnx",
     }
-
-    calls: list[str] = []
-
-    def fake_download(urls, dest, min_bytes, log=None):
-        calls.append(dest.name)
-        dest.write_bytes(b"x" * (min_bytes + 8))
-
-    monkeypatch.setattr("clonebins_core.models._download_first_ok", fake_download)
-    started = client.post("/api/models/download", json={"all_variants": True})
-    assert started.status_code == 200, started.text
-    task_id = started.json()["id"]
-    deadline = time.time() + 8
-    last = started.json()
-    while time.time() < deadline:
-        last = client.get(f"/api/models/download/{task_id}").json()
-        if last["status"] in {"done", "error"}:
-            break
-        time.sleep(0.05)
-    assert last["status"] == "done", last
-    assert last["missing_count"] == 0
-    assert len(calls) == 7
-    assert "face_detection_yunet_2026may.onnx" in calls
-    assert all("http" not in line.lower() or "password" not in line.lower() for line in last["logs"])
-
-    calls.clear()
-    again = client.post("/api/models/download", json={"all_variants": True})
-    task_id = again.json()["id"]
-    deadline = time.time() + 8
-    last = again.json()
-    while time.time() < deadline:
-        last = client.get(f"/api/models/download/{task_id}").json()
-        if last["status"] in {"done", "error"}:
-            break
-        time.sleep(0.05)
-    assert last["status"] == "done"
-    assert calls == []
-    assert any("already present" in line.lower() or "nothing to download" in line.lower() for line in last["logs"])
-
-    install = client.get("/api/models/install-command")
-    assert install.status_code == 200
-    assert install.json()["command"] == "clonebins models download --force"
-    assert "face_detection_yunet_2023mar.onnx" in install.json()["curl_script"]
-
-    opened = client.post("/api/models/open-folder")
-    assert opened.status_code == 200
-    assert opened.json()["models_dir"] == str(tmp_path)
-    assert Path(opened.json()["models_dir"]).is_dir()
+    assert body["install_command"] == "clonebins models download --force"
+    for path, method in (
+        ("/api/models/verify", "post"),
+        ("/api/models/download", "post"),
+        ("/api/models/open-folder", "post"),
+        ("/api/models/install-command", "get"),
+        ("/api/models/download/abc", "get"),
+    ):
+        response = getattr(client, method)(path)
+        assert response.status_code == 404, (path, response.status_code, response.text)
 
 
-def test_verify_copies_baked_then_downloads_only_missing(tmp_path, monkeypatch):
+def test_startup_copies_baked_models_without_network(tmp_path, monkeypatch):
     baked = tmp_path / "baked"
     cache = tmp_path / "cache"
     baked.mkdir()
@@ -108,29 +71,15 @@ def test_verify_copies_baked_then_downloads_only_missing(tmp_path, monkeypatch):
     (baked / baked_name).write_bytes(b"b" * 60_000)
     monkeypatch.setenv("CLONEBINS_MODELS_DIR", str(cache))
     monkeypatch.setenv("CLONEBINS_BUNDLED_MODELS", str(baked))
-    calls: list[str] = []
 
-    def fake_download(urls, dest, min_bytes, log=None):
-        calls.append(dest.name)
-        dest.write_bytes(b"x" * (min_bytes + 8))
+    def boom(*_args, **_kwargs):
+        raise AssertionError("startup must not download models")
 
-    monkeypatch.setattr("clonebins_core.models._download_first_ok", fake_download)
-    started = client.post("/api/models/verify", json={"all_variants": True, "force": False})
-    assert started.status_code == 200, started.text
-    task_id = started.json()["id"]
-    deadline = time.time() + 8
-    last = started.json()
-    while time.time() < deadline:
-        last = client.get(f"/api/models/download/{task_id}").json()
-        if last["status"] in {"done", "error"}:
-            break
-        time.sleep(0.05)
-    assert last["status"] == "done", last
-    assert baked_name not in calls
-    assert len(calls) == 6
-    assert (cache / baked_name).is_file()
-    assert last["missing_count"] == 0
-    assert any("verify" in line.lower() for line in last["logs"])
+    monkeypatch.setattr("clonebins_core.models._download_first_ok", boom)
+    with TestClient(app) as started:
+        health = started.get("/api/health")
+        assert health.status_code == 200
+    assert (cache / baked_name).read_bytes() == b"b" * 60_000
 
 
 def test_from_share_then_cluster(tmp_path, monkeypatch):

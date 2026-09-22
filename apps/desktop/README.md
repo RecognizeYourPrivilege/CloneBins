@@ -181,6 +181,5 @@ weights live in `~/.cache/clonebins/models` (the same cache as the CLI).
 Release builds bake the seven ONNX files into the app
 (`Contents/Resources/models` on macOS, `/usr/share/clonebins/models` on Linux,
 `models/` next to the exe on Windows). The sidecar sets `CLONEBINS_BUNDLED_MODELS`
-so Verify can copy those into the cache and download only files that are still
-missing. CI downloads the weights with `scripts/fetch-bundled-models.sh`; they
-are not committed.
+so startup can copy those into the cache with no models UI. CI downloads the
+weights with `scripts/fetch-bundled-models.sh`; they are not committed.

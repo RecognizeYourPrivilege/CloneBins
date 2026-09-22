@@ -4,17 +4,18 @@ Cluster AI-generated images by **face** and **body/identity**, then drop each
 identity into its own folder for LoRA training datasets.
 
 v0.1.4 is a local CLI, a local web UI, a Tauri 2 desktop shell, an iOS SwiftUI
-client, and a shared Python core. New in this release: desktop installers ship
-all seven YuNet + SFace ONNX files inside the app. **Verify** checks
-`~/.cache/clonebins/models`, copies those baked weights when a file is missing,
-then downloads only the gaps. **Download** stays enabled and does the same fill.
-Terminal fallback: `clonebins models download --force`. See [CHANGELOG.md](CHANGELOG.md).
+client, and a shared Python core. Desktop installers ship all seven YuNet +
+SFace ONNX files inside the app. On first launch the sidecar copies any missing
+weights into `~/.cache/clonebins/models`. There is no models screen in the UI.
+Power users can still run `clonebins models status|verify|download`. See
+[CHANGELOG.md](CHANGELOG.md).
 
 Processing is **offline-first / user-controlled**: CLI, web, and desktop keep
 images on the machine that runs `clonebins_core`. The iOS app sends photos you
 pick to a **clonebins-api you run** (Mac loopback or LAN) — not a vendor cloud.
-Face model weights are downloaded once on the API/CLI host (optional if you
-only need appearance clustering).
+Face model weights ship inside the desktop installers and the Docker image.
+They are copied into the local cache on startup (optional if you only need
+appearance clustering).
 
 ## Demo
 
@@ -136,10 +137,11 @@ the app** at package time (CI downloads them; they are not stored in git):
 | Windows NSIS and zip | `models/` next to `CloneBins.exe` |
 | Docker image | `/opt/clonebins/models`, copied into `/models` |
 
-On first launch and on **Verify**, CloneBins uses that order: (1) files already
-in the user cache, (2) copy from the baked app bundle when the cache file is
-missing, (3) network download **only** for files that are still missing.
-After the cache is complete, **no network is used**.
+On first launch (and again before clustering), CloneBins fills the cache in
+this order, with no UI: (1) files already in the user cache, (2) copy from the
+baked app bundle when the cache file is missing. The network is used only if
+you ask the CLI to download files that are still missing. After the cache is
+complete, **no network is used**.
 
 ```bash
 clonebins models verify            # cache, then baked copy, then download only gaps
@@ -253,11 +255,10 @@ the FastAPI process on this machine.
 
 Prefer Docker for a one-shot UI (models included): see [Docker (web UI)](#docker-web-ui).
 
-**Face models in the UI:** **Download** is always enabled. **Verify** checks the
-cache, copies ONNX files baked into the app, then downloads only what is still
-missing (progress in the log box). The cache stays `~/.cache/clonebins/models`.
-**Open models folder** / **Copy install command** are available if the UI path
-flakes. CLI: `clonebins models verify` or `clonebins models download --force`.
+**Face models:** the app does not show a models section. Weights ship baked
+into the installer and are copied into `~/.cache/clonebins/models` on startup.
+Settings still let you pick the YuNet detector and SFace recognizer. CLI:
+`clonebins models verify` or `clonebins models download --force`.
 
 Flow: upload jpg/png/webp (corrupt files are skipped and listed), type a
 folder path on this machine, **or connect a network share** → set threshold /
@@ -429,8 +430,8 @@ filesystem; CloneBins copies if linking fails.
 - CLI / web / desktop process files on the machine you run them on.
 - iOS v1 uploads the photos you pick to **your** `clonebins-api` (loopback or
   LAN). That is still not a hosted service.
-- The only optional vendor network call is fetching YuNet/SFace weights onto
-  the API/CLI host (UI **Download**, or `clonebins models download --force`).
+- The only optional vendor network call is fetching YuNet/SFace weights that
+  are not already baked into the app (`clonebins models download --force`).
 - Share passwords/keys stay on that same host and are not logged.
 - Do not point `--input` at folders you would not want processed on that
   machine; output bins are extra copies/hardlinks of those files.

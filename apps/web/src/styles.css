@@ -299,22 +299,6 @@ a.download {
   color: #042f2e;
 }
 
-.logbox {
-  margin: 8px 0 16px;
-  min-height: 140px;
-  max-height: 220px;
-  overflow: auto;
-  background: #05040a;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  padding: 10px 12px;
-  color: #c4f1c8;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 12px;
-  line-height: 1.45;
-  white-space: pre-wrap;
-}
-
 .results-head {
   display: flex;
   justify-content: space-between;
