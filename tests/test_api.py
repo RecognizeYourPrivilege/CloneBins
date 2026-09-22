@@ -99,6 +99,40 @@ def test_models_status_and_download_skips_present(tmp_path, monkeypatch):
     assert Path(opened.json()["models_dir"]).is_dir()
 
 
+def test_verify_copies_baked_then_downloads_only_missing(tmp_path, monkeypatch):
+    baked = tmp_path / "baked"
+    cache = tmp_path / "cache"
+    baked.mkdir()
+    cache.mkdir()
+    baked_name = "face_detection_yunet_2023mar.onnx"
+    (baked / baked_name).write_bytes(b"b" * 60_000)
+    monkeypatch.setenv("CLONEBINS_MODELS_DIR", str(cache))
+    monkeypatch.setenv("CLONEBINS_BUNDLED_MODELS", str(baked))
+    calls: list[str] = []
+
+    def fake_download(urls, dest, min_bytes, log=None):
+        calls.append(dest.name)
+        dest.write_bytes(b"x" * (min_bytes + 8))
+
+    monkeypatch.setattr("clonebins_core.models._download_first_ok", fake_download)
+    started = client.post("/api/models/verify", json={"all_variants": True, "force": False})
+    assert started.status_code == 200, started.text
+    task_id = started.json()["id"]
+    deadline = time.time() + 8
+    last = started.json()
+    while time.time() < deadline:
+        last = client.get(f"/api/models/download/{task_id}").json()
+        if last["status"] in {"done", "error"}:
+            break
+        time.sleep(0.05)
+    assert last["status"] == "done", last
+    assert baked_name not in calls
+    assert len(calls) == 6
+    assert (cache / baked_name).is_file()
+    assert last["missing_count"] == 0
+    assert any("verify" in line.lower() for line in last["logs"])
+
+
 def test_from_share_then_cluster(tmp_path, monkeypatch):
     write_identity_set(tmp_path / "remote")
 

@@ -3,11 +3,12 @@
 Cluster AI-generated images by **face** and **body/identity**, then drop each
 identity into its own folder for LoRA training datasets.
 
-v0.1.3 is a local CLI, a local web UI, a Tauri 2 desktop shell, an iOS SwiftUI
-client, and a shared Python core. New in this release: the desktop **Download**
-button is always enabled (Verify cannot block it) and writes all seven YuNet +
-SFace ONNX files into `~/.cache/clonebins/models`. Terminal fallback:
-`clonebins models download --force`. See [CHANGELOG.md](CHANGELOG.md).
+v0.1.4 is a local CLI, a local web UI, a Tauri 2 desktop shell, an iOS SwiftUI
+client, and a shared Python core. New in this release: desktop installers ship
+all seven YuNet + SFace ONNX files inside the app. **Verify** checks
+`~/.cache/clonebins/models`, copies those baked weights when a file is missing,
+then downloads only the gaps. **Download** stays enabled and does the same fill.
+Terminal fallback: `clonebins models download --force`. See [CHANGELOG.md](CHANGELOG.md).
 
 Processing is **offline-first / user-controlled**: CLI, web, and desktop keep
 images on the machine that runs `clonebins_core`. The iOS app sends photos you
@@ -124,14 +125,27 @@ YuNet has four ONNX files and SFace has three; the Docker web image embeds all s
 | `2023mar_int8bq` block-quant | `2021dec_int8bq` block-quant |
 | `2026may` dynamic H/W | |
 
-They are stored in `~/.cache/clonebins/models` (override with
-`CLONEBINS_MODELS_DIR`). After they exist, **no network is used**.
+The user cache is still `~/.cache/clonebins/models` (override with
+`CLONEBINS_MODELS_DIR`). Desktop installers also **bake the seven files into
+the app** at package time (CI downloads them; they are not stored in git):
+
+| Package | Baked weights |
+| --- | --- |
+| macOS `.app` | `Contents/Resources/models/` |
+| Ubuntu `.deb`, Arch, AppImage | `/usr/share/clonebins/models/` |
+| Windows NSIS and zip | `models/` next to `CloneBins.exe` |
+| Docker image | `/opt/clonebins/models`, copied into `/models` |
+
+On first launch and on **Verify**, CloneBins uses that order: (1) files already
+in the user cache, (2) copy from the baked app bundle when the cache file is
+missing, (3) network download **only** for files that are still missing.
+After the cache is complete, **no network is used**.
 
 ```bash
-clonebins models download          # all seven ONNX files; skips files already cached
+clonebins models verify            # cache, then baked copy, then download only gaps
+clonebins models download          # same fill; skips files already cached
 clonebins models download --force  # re-fetch all seven even if they look valid
-clonebins models status            # present vs missing
-clonebins models verify            # alias for status
+clonebins models status            # present vs missing (does not download)
 ```
 
 `clonebins cluster` will also try to download them on first run unless you pass
@@ -239,10 +253,11 @@ the FastAPI process on this machine.
 
 Prefer Docker for a one-shot UI (models included): see [Docker (web UI)](#docker-web-ui).
 
-**Face models in the UI:** **Download** is always enabled and writes all seven
-ONNX files into `~/.cache/clonebins/models` (progress in the log box). **Verify**
-is optional status. **Open models folder** / **Copy install command** are
-available if the UI path flakes. CLI: `clonebins models download --force`.
+**Face models in the UI:** **Download** is always enabled. **Verify** checks the
+cache, copies ONNX files baked into the app, then downloads only what is still
+missing (progress in the log box). The cache stays `~/.cache/clonebins/models`.
+**Open models folder** / **Copy install command** are available if the UI path
+flakes. CLI: `clonebins models verify` or `clonebins models download --force`.
 
 Flow: upload jpg/png/webp (corrupt files are skipped and listed), type a
 folder path on this machine, **or connect a network share** → set threshold /
@@ -331,13 +346,13 @@ GitHub Actions publishes Linux, macOS, and Windows installers on
 
 | File | Platform |
 | --- | --- |
-| `CloneBins-0.1.3-macos-arm64.dmg` | Apple Silicon (unsigned / ad-hoc signed) |
-| `CloneBins-0.1.3-macos-x64.dmg` | Intel Mac (unsigned / ad-hoc signed) |
-| `CloneBins-0.1.3-ubuntu-amd64.deb` | Ubuntu / Debian |
-| `CloneBins-0.1.3-linux-x64.AppImage` | Generic glibc Linux |
-| `CloneBins-0.1.3-archlinux-x86_64.pkg.tar.zst` | Arch |
-| `CloneBins-0.1.3-windows-x64-setup.exe` | Windows 10/11 NSIS (current user) |
-| `CloneBins-0.1.3-windows-x64.zip` | Windows portable (`CloneBins.exe` + `clonebins-api.exe`) |
+| `CloneBins-0.1.4-macos-arm64.dmg` | Apple Silicon (unsigned / ad-hoc signed) |
+| `CloneBins-0.1.4-macos-x64.dmg` | Intel Mac (unsigned / ad-hoc signed) |
+| `CloneBins-0.1.4-ubuntu-amd64.deb` | Ubuntu / Debian |
+| `CloneBins-0.1.4-linux-x64.AppImage` | Generic glibc Linux |
+| `CloneBins-0.1.4-archlinux-x86_64.pkg.tar.zst` | Arch |
+| `CloneBins-0.1.4-windows-x64-setup.exe` | Windows 10/11 NSIS (current user) |
+| `CloneBins-0.1.4-windows-x64.zip` | Windows portable (`CloneBins.exe` + `clonebins-api.exe`) |
 
 macOS DMGs are **unsigned / ad-hoc signed**, not notarized — see
 [apps/desktop/README.md](apps/desktop/README.md) (optional Apple secrets).

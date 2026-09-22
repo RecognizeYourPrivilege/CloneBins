@@ -49,6 +49,28 @@ def test_package_linux_deb_and_arch(tmp_path: Path) -> None:
     assert "usr/bin/clonebins-desktop" in listing
     assert "usr/bin/clonebins-api" in listing
     assert "usr/share/applications/clonebins.desktop" in listing
+    models = tmp_path / "models"
+    models.mkdir()
+    weight = models / "face_detection_yunet_2023mar.onnx"
+    weight.write_bytes(b"onnx-yunet")
+    deb_models = tmp_path / "CloneBins-models.deb"
+    _run(
+        [
+            "bash",
+            str(SCRIPT),
+            "deb",
+            "--desktop",
+            str(desktop),
+            "--api",
+            str(api),
+            "--models",
+            str(models),
+            "--out",
+            str(deb_models),
+        ]
+    )
+    listing_models = subprocess.check_output(["dpkg-deb", "-c", str(deb_models)], text=True)
+    assert "usr/share/clonebins/models/face_detection_yunet_2023mar.onnx" in listing_models
     control = subprocess.check_output(["dpkg-deb", "-f", str(deb), "Package"], text=True)
     assert control.strip() == "clonebins"
 

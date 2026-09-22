@@ -28,9 +28,14 @@ COPY packages/api packages/api
 RUN pip install --no-cache-dir --upgrade pip \
     && pip install --no-cache-dir -e packages/core -e packages/api
 
-# opencv_zoo YuNet ×4 + SFace ×3 (Hugging Face, GitHub LFS mirrors as fallback)
-RUN mkdir -p /models \
-    && python -m clonebins_core.models --all --dir /models
+# opencv_zoo YuNet ×4 + SFace ×3 baked into the image (Hugging Face, then
+# GitHub LFS / raw / jsDelivr). /opt/clonebins/models is the bundle copy;
+# /models is the user cache (CLONEBINS_MODELS_DIR), pre-seeded so Verify
+# does not need the network unless a file is removed.
+ENV CLONEBINS_BUNDLED_MODELS=/opt/clonebins/models
+RUN mkdir -p /opt/clonebins/models /models \
+    && python -m clonebins_core.models --all --dir /opt/clonebins/models \
+    && cp -a /opt/clonebins/models/. /models/
 
 COPY --from=web /web/dist /app/web/dist
 

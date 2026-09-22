@@ -7,7 +7,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
-VERSION="${CLONEBINS_VERSION:-0.1.1}"
+VERSION="${CLONEBINS_VERSION:-0.1.4}"
 ICON_DIR="$ROOT/apps/desktop/src-tauri/icons"
 URL="https://github.com/RecognizeYourPrivilege/CloneBins"
 PKGDESC="Local-first clustering of AI-generated images into LoRA identity bins."
@@ -21,6 +21,7 @@ CLI_BIN=""
 DEB_IN=""
 APPIMAGE_IN=""
 OUT=""
+MODELS_DIR=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -29,6 +30,7 @@ while [[ $# -gt 0 ]]; do
     --cli) CLI_BIN="${2:?}"; shift 2 ;;
     --deb) DEB_IN="${2:?}"; shift 2 ;;
     --appimage) APPIMAGE_IN="${2:?}"; shift 2 ;;
+    --models) MODELS_DIR="${2:?}"; shift 2 ;;
     --out) OUT="${2:?}"; shift 2 ;;
     *) echo "unknown arg: $1" >&2; exit 1 ;;
   esac
@@ -96,6 +98,23 @@ install_icons() {
   fi
 }
 
+install_models() {
+  local root="$1"
+  local src="${MODELS_DIR:-$ROOT/apps/desktop/resources/models}"
+  if [[ ! -d "$src" ]]; then
+    return 0
+  fi
+  shopt -s nullglob
+  local files=("$src"/*.onnx)
+  shopt -u nullglob
+  if [[ ${#files[@]} -eq 0 ]]; then
+    return 0
+  fi
+  mkdir -p "$root/usr/share/clonebins/models"
+  cp -f "${files[@]}" "$root/usr/share/clonebins/models/"
+  echo "Installed ${#files[@]} baked ONNX files into usr/share/clonebins/models"
+}
+
 install_bins() {
   local root="$1"
   mkdir -p "$root/usr/bin"
@@ -121,6 +140,7 @@ stage_payload() {
   rm -rf "$root"
   mkdir -p "$root"
   install_bins "$root"
+  install_models "$root"
   if [[ -n "$DESKTOP_BIN" ]]; then
     write_desktop_entry "$root/usr/share/applications/clonebins.desktop"
     install_icons "$root"
@@ -237,6 +257,7 @@ inject_deb() {
   mkdir -p "$stage/pkg/usr/bin"
   cp "$API_BIN" "$stage/pkg/usr/bin/clonebins-api"
   chmod 0755 "$stage/pkg/usr/bin/clonebins-api"
+  install_models "$stage/pkg"
   rm -f "$OUT"
   dpkg-deb --build --root-owner-group "$stage/pkg" "$OUT"
   finish_out
@@ -264,6 +285,7 @@ inject_appimage() {
   mkdir -p "$stage/squashfs-root/usr/bin"
   cp "$API_BIN" "$stage/squashfs-root/usr/bin/clonebins-api"
   chmod 0755 "$stage/squashfs-root/usr/bin/clonebins-api"
+  install_models "$stage/squashfs-root"
   local tool="${APPIMAGETOOL:-}"
   if [[ -z "$tool" ]]; then
     for c in appimagetool appimagetool-x86_64.AppImage; do

@@ -1,6 +1,6 @@
 [package]
 name = "clonebins-desktop"
-version = "0.1.3"
+version = "0.1.4"
 description = "Tauri 2 desktop shell for CloneBins"
 authors = ["CloneBins contributors"]
 edition = "2021"

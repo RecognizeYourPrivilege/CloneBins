@@ -17,11 +17,14 @@ from clonebins_core.models import (
     catalog_status,
     curl_install_script,
     default_models_dir,
+    copy_bundled_into_cache,
     download_all_face_models,
     download_missing_face_models,
+    ensure_face_models,
     missing_model_specs,
     resolve_model_paths,
     user_home,
+    verify_and_fill_face_models,
 )
 
 
@@ -108,6 +111,43 @@ def test_download_missing_skips_present(tmp_path, monkeypatch):
     assert len(calls) == 6
     download_missing_face_models(models_dir=tmp_path, all_variants=True)
     assert len(calls) == 6
+
+
+def test_baked_models_fill_cache_before_network(tmp_path, monkeypatch):
+    baked = tmp_path / "baked"
+    cache = tmp_path / "cache"
+    baked.mkdir()
+    present = YUNET_MODELS[0]
+    (baked / present.filename).write_bytes(b"b" * (present.min_bytes + 8))
+    monkeypatch.setenv("CLONEBINS_BUNDLED_MODELS", str(baked))
+    calls: list[str] = []
+
+    def fake_download(urls, dest, min_bytes, log=None):
+        calls.append(dest.name)
+        dest.write_bytes(b"y" * (min_bytes + 10))
+
+    monkeypatch.setattr("clonebins_core.models._download_first_ok", fake_download)
+    copied = copy_bundled_into_cache(cache)
+    assert copied == [present.filename]
+    root = verify_and_fill_face_models(models_dir=cache)
+    assert root == cache
+    assert present.filename not in calls
+    assert len(calls) == 6
+    assert (cache / present.filename).stat().st_size >= present.min_bytes
+
+    def boom(*_args, **_kwargs):
+        raise AssertionError("baked defaults must not hit the network")
+
+    monkeypatch.setattr("clonebins_core.models._download_first_ok", boom)
+    paths = ensure_face_models(
+        models_dir=cache,
+        download=True,
+        yunet_id=present.id,
+        sface_id=SFACE_MODELS[0].id,
+    )
+    # SFace was filled by verify_and_fill above, YuNet came from the bundle.
+    assert paths.yunet.is_file()
+    assert paths.sface.is_file()
 
 
 def test_download_force_refetches_present(tmp_path, monkeypatch):
