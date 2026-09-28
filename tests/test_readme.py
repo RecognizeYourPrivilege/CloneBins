@@ -26,14 +26,34 @@ def test_readme_embeds_github_safe_demo_media() -> None:
 
 def test_readme_has_docker_quick_start() -> None:
     assert "## Docker (web UI)" in README
+    # Primary path is the prebuilt GHCR image, not a local build.
+    assert (
+        'docker run --rm -p 8765:8765 -v "$HOME/gens:/data:ro" '
+        "ghcr.io/recognizeyourprivilege/clonebins:latest"
+    ) in README
+    assert "docker compose pull" in README
+    assert "docker compose up" in README
+    # Contributor path stays documented after the pull instructions.
     assert "docker compose up --build" in README
+    assert README.index("ghcr.io/recognizeyourprivilege/clonebins:latest") < README.index(
+        "docker compose up --build"
+    )
     assert "http://127.0.0.1:8765" in README
     assert "[`Dockerfile`](Dockerfile)" in README
     assert "[`docker-compose.yml`](docker-compose.yml)" in README
     assert (ROOT / "Dockerfile").is_file()
     assert (ROOT / "docker-compose.yml").is_file()
     compose = (ROOT / "docker-compose.yml").read_text(encoding="utf-8")
+    assert "image: ghcr.io/recognizeyourprivilege/clonebins:latest" in compose
+    assert "${HOME}/gens:/data:ro" in compose
     assert "8765:8765" in compose
+    assert "CLONEBINS_API_HOST" in compose
+    assert "CLONEBINS_API_PORT" in compose
+    assert "CLONEBINS_MODELS_DIR" in compose
+    assert "CLONEBINS_WEB_DIST" in compose
+    # `build: .` stays available for contributors, but not as an active key.
+    assert "# build: ." in compose
+    assert "\n    build:" not in compose
     dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
     assert "clonebins-api" in dockerfile
     assert "clonebins_core.models --all" in dockerfile

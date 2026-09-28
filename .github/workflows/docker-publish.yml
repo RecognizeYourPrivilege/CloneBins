@@ -1,0 +1,100 @@
+# Build the web UI + API image (seven YuNet/SFace ONNX files baked by the
+# Dockerfile) and push it to GHCR. Strangers pull; they do not clone or build.
+#
+# Image: ghcr.io/recognizeyourprivilege/clonebins
+#   latest     — push to the default branch (main)
+#   v1.0.0     — git tag v1.0.0 (the raw tag)
+#   1.0.0      — same tag, semver without the v prefix
+name: Publish Docker image
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+
+permissions:
+  contents: read
+  packages: write
+  # GitHub Actions cache used by docker/build-push-action (type=gha).
+  actions: write
+
+concurrency:
+  group: docker-ghcr-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE: ghcr.io/recognizeyourprivilege/clonebins
+
+jobs:
+  publish:
+    name: build and push
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Docker metadata
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.IMAGE }}
+          # latest=auto would also tag latest on semver tags. latest is only
+          # for the default branch; version tags stay on the v* push.
+          flavor: |
+            latest=false
+          # type=ref,event=tag covers a v* tag that is not valid semver.
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=semver,pattern={{raw}}
+            type=semver,pattern={{version}}
+            type=ref,event=tag
+
+      - name: Build and push
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          # Stay within contents:read + packages:write. Provenance
+          # attestations need id-token and can fail the push.
+          provenance: false
+          sbom: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Request public package visibility
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # This repo is owned by a user account. Personal GHCR packages
+          # often start private; anonymous `docker pull` needs public.
+          # Actions may change visibility with GITHUB_TOKEN after the push
+          # that created the package. A refusal does not fail the publish —
+          # the owner sets Public once under the package settings.
+          set +e
+          gh api --method PUT \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "/user/packages/container/clonebins/visibility" \
+            -f visibility=public
+          echo "visibility PUT exit $?"
+          gh api \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "/user/packages/container/clonebins" \
+            --jq '{name:.name,visibility:.visibility,repository:.repository.full_name}'
+          echo "visibility GET exit $?"
+          exit 0
