@@ -32,15 +32,42 @@ The GIF plays inline on GitHub. Click it for the [full-length MP4](docs/demo/web
 
 ## Docker (web UI)
 
-One command runs the API, the Vite-built UI, and **all seven** opencv_zoo ONNX
-weights (4 YuNet + 3 SFace) baked into the image. No separate `clonebins-api`
-process, no Node toolchain.
+This is the primary install. One command pulls a prebuilt image. It runs the
+API, the Vite-built UI, and **all seven** opencv_zoo ONNX weights (4 YuNet +
+3 SFace). The container serves the UI itself, so a Node toolchain is unused.
+
+Image: `ghcr.io/recognizeyourprivilege/clonebins`
+
+| Tag | When it is published |
+| --- | --- |
+| `latest` | Push to the default branch (`main`) |
+| `v1.0.0` | Push of git tag `v1.0.0` (same pattern for any `v*` tag) |
+| `1.0.0` | Same `v*` push, semver without the `v` prefix |
 
 ```bash
-docker compose up --build
+docker run --rm -p 8765:8765 -v "$HOME/gens:/data:ro" ghcr.io/recognizeyourprivilege/clonebins:latest
 ```
 
 Open **http://127.0.0.1:8765**.
+
+`$HOME/gens` on the host is mounted read-only at `/data`. Put images there and
+type `/data` in the UI folder-path field. The one-liner assumes the GHCR
+package is **public**, so `docker pull` needs no login. The publish workflow
+links the package to this repository and requests public visibility. If a
+first publish stays private, the repo owner sets it to Public once (GitHub →
+Packages → `clonebins` → Package settings → Change visibility). After that,
+anyone can pull.
+
+From a clone, Compose pulls the same image:
+
+```bash
+docker compose pull
+docker compose up
+```
+
+`docker-compose.yml` already publishes port `8765`, keeps the `CLONEBINS_*`
+environment variables, and mounts `${HOME}/gens` at `/data` read-only. Same
+URL: **http://127.0.0.1:8765**.
 
 | Piece | In the image |
 | --- | --- |
@@ -51,20 +78,31 @@ Open **http://127.0.0.1:8765**.
 
 Files: [`Dockerfile`](Dockerfile), [`docker-compose.yml`](docker-compose.yml).
 Weights come from Hugging Face (`opencv/face_detection_yunet`,
-`opencv/face_recognition_sface`) at build time, with GitHub LFS mirrors as
-fallback. After the image exists, clustering does not need the network.
+`opencv/face_recognition_sface`) when the image is built in GitHub Actions,
+with GitHub LFS mirrors as fallback. After the image exists, clustering does
+not need the network.
 
 In the UI: pick detector/recognizer in Settings. Bins start **unchecked** for
 the zip — use **Include all in zip** or tick **in zip**. **open ↗** (or
 Ctrl/Cmd-click) loads the original in a new tab.
 
-To cluster a folder on the host, uncomment the volume in
-`docker-compose.yml` and type that path in the UI:
+The default volume is the host gens folder. To point it at another directory,
+edit the host side and still type `/data` in the UI:
 
 ```yaml
 volumes:
   - ${HOME}/gens:/data:ro
 ```
+
+**From source (contributors).** Uncomment `build: .` in
+[`docker-compose.yml`](docker-compose.yml), then:
+
+```bash
+docker compose up --build
+```
+
+That rebuilds the web dist, the API, and the seven baked ONNX files. The pull
+commands above are the path for everyone else.
 
 ## Architecture (short)
 
@@ -100,6 +138,9 @@ See [docs/architecture.md](docs/architecture.md) for the longer plan.
 - macOS + Xcode 15+ (iOS client; this repo’s Linux CI cannot compile it)
 
 ## Install
+
+The web UI install is the [Docker one-liner](#docker-web-ui) above. This
+section is the from-source Python install.
 
 From the repo root (editable, recommended):
 
@@ -454,8 +495,8 @@ packages/api/      FastAPI (clonebins-api)
 apps/web/          Vite + React UI
 apps/desktop/      Tauri 2 shell
 apps/ios/          SwiftUI + XcodeGen (LAN API client; Core ML stub)
-Dockerfile         web UI + API + six opencv_zoo ONNX files
-docker-compose.yml docker compose up --build → http://127.0.0.1:8765
+Dockerfile         web UI + API + seven YuNet/SFace ONNX files (baked)
+docker-compose.yml pull ghcr.io/recognizeyourprivilege/clonebins:latest → http://127.0.0.1:8765
 docs/architecture.md
 docs/demo/         README screenshot, GIF, and MP4
 CHANGELOG.md

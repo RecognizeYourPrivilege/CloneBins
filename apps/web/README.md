@@ -35,10 +35,14 @@ Bins are **not** in the zip until you tick **in zip** or **Include all in zip**.
 
 ## Docker
 
-From the repo root (API + built UI + all seven opencv_zoo ONNX files):
+Primary path is the prebuilt image. See the repo
+[README](../../README.md#docker-web-ui).
 
 ```bash
-docker compose up --build
+docker run --rm -p 8765:8765 -v "$HOME/gens:/data:ro" ghcr.io/recognizeyourprivilege/clonebins:latest
 ```
 
-Then http://127.0.0.1:8765 — no separate `clonebins-api` process.
+Then http://127.0.0.1:8765 — no separate `clonebins-api` process. From a
+clone, `docker compose pull` and `docker compose up` use the same image.
+`docker compose up --build` is the contributor path after uncommenting
+`build: .` in `docker-compose.yml`.

@@ -1,5 +1,9 @@
 # syntax=docker/dockerfile:1
 # Web UI + clonebins-api with YuNet/SFace ONNX weights baked in.
+# Primary (prebuilt, no clone):
+#   docker run --rm -p 8765:8765 -v "$HOME/gens:/data:ro" \
+#     ghcr.io/recognizeyourprivilege/clonebins:latest
+# Contributors: uncomment `build: .` in docker-compose.yml, then
 #   docker compose up --build
 #   open http://127.0.0.1:8765
 

@@ -2,6 +2,7 @@
 
 ## 1.0.0 — 2026-09-22
 
+- **Prebuilt Docker image.** Primary web UI install is `ghcr.io/recognizeyourprivilege/clonebins:latest` (`docker run` or `docker compose up`). Version tags `v1.0.0` and `1.0.0` publish when a `v*` git tag is pushed. `$HOME/gens` is mounted read-only at `/data`. Building the Dockerfile remains the contributor path.
 - **First stable release.** Package versions are 1.0.0 across the core, CLI, API, web UI, desktop app, and iOS client. The 0.1.x GitHub releases are retired in favor of this tag.
 - **Baked models, no models UI.** Desktop installers ship all seven YuNet + SFace ONNX files (macOS `Contents/Resources/models`, Linux `/usr/share/clonebins/models`, Windows `models/` next to the exe). On API and app start, missing files are copied into `~/.cache/clonebins/models`. There is no Verify, Download, Open models folder, Copy install command, or models log. CLI `clonebins models status|verify|download` remains.
 - **macOS Intel.** Native `macos-15-intel` runner, isolated venv, PyInstaller `--target-arch`, larger DMG headroom, and a bounded `hdiutil` so a stuck disk image fails instead of hanging the job. A release is published only when both DMGs succeed.
